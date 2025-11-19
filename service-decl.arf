@@ -1,0 +1,3 @@
+service NameService {
+    check_name(req CheckNameRequest) -> common.CheckNameResponse;
+}

@@ -1,0 +1,1409 @@
+\documentclass[a4paper, 10pt]{article}
+\hyphenpenalty=8000
+\textwidth=125mm
+\textheight=185mm
+
+\usepackage{graphicx}
+\usepackage{alltt}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{indentfirst}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{matrix,fit}
+
+\usepackage[
+	backend=biber,
+	style=numeric,
+	citestyle=numeric,
+	date=iso,
+	defernumbers=true
+]{biblatex}
+
+\DeclareFieldFormat{labelnumber}{%
+	\iffieldundef{shorthand}
+		{#1}
+		{\printfield{shorthand}}}
+
+\addbibresource{spec.bib}
+
+\setlength\bibitemsep{1em}
+
+\lstdefinelanguage{arf}{
+	sensitive = true,
+	keywords={},
+	otherkeywords={% Operators
+		=, ;, (, ), {, }, ->, <, >, \,, @
+	},
+	keywords = [2]{
+		uint8, uint16, uint32, uint64, int8, int16, int32, int64,
+		float32, float64, string, bool, bytes, timestamp,
+		package, import, enum, struct, service, stream,
+		map, array, optional, @deprecated
+	},
+	keywordstyle=\color{gray},
+	keywordstyle=[2]\color{blue},
+	numbers=left,
+	numberstyle=\scriptsize,
+	stepnumber=1,
+	numbersep=8pt,
+	showstringspaces=false,
+	breaklines=true,
+	frame=top,
+	comment=[l]{//},
+	morecomment=[s]{/*}{*/},
+	commentstyle=\color{purple}\ttfamily,
+	stringstyle=\color{red}\ttfamily,
+	morestring=[b]',
+	morestring=[b]",
+	basicstyle=\ttfamily\small,
+	aboveskip=20pt,
+	belowskip=20pt,
+	framesep=10pt
+}
+
+\lstdefinelanguage{meta-arf}{
+	sensitive = true,
+	keywords={},
+	otherkeywords={% Operators
+		<, >
+	},
+	keywords = [2]{},
+	keywordstyle=\color{gray},
+	keywordstyle=[2]\color{blue},
+	numbers=none,
+	numberstyle=\scriptsize,
+	stepnumber=1,
+	numbersep=8pt,
+	showstringspaces=false,
+	breaklines=true,
+	frame=top,
+	comment=[l]{//},
+	morecomment=[s]{/*}{*/},
+	commentstyle=\color{purple}\ttfamily,
+	stringstyle=\color{red}\ttfamily,
+	morestring=[b]',
+	morestring=[b]",
+	basicstyle=\ttfamily\small,
+	aboveskip=20pt,
+	belowskip=20pt,
+	framesep=10pt
+}
+
+\lstdefinelanguage{plain}{
+	sensitive = true,
+	keywords={},
+	otherkeywords={},
+	keywords = [2]{},
+	numbers=none,
+	showstringspaces=false,
+	breaklines=true,
+	frame=top,
+	basicstyle=\ttfamily\small,
+	aboveskip=20pt,
+	belowskip=20pt,
+	framesep=10pt
+}
+
+\pagestyle{fancy}
+
+\fancyhf{}
+\fancyhead[L]{\small arf - Another RPC Framework}
+\fancyhead[C]{}
+\fancyhead[R]{\small Sartori}
+
+\renewcommand{\headrulewidth}{0.4pt}
+
+\newcommand{\secref}[1]{\S~\ref{#1}}
+
+\fancypagestyle{firstpage}{%
+	\fancyhf{} % clear
+	\fancyhead[L]{}
+	\fancyhead[R]{}
+	\renewcommand{\headrulewidth}{0pt}
+	\fancyfoot[C]{\thepage}
+}
+
+\fancyfoot[C]{\thepage}
+\renewcommand{\footrulewidth}{0pt} % no line above footer (optional)
+
+
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+\newcommand{\doi}[1]{\href{https://doi.org/#1}{\texttt{https://doi.org/#1}}}
+
+\setcounter{secnumdepth}{5}
+\setcounter{tocdepth}{5}
+
+\makeatletter
+\newcommand\subsubsubsection{%
+	\@startsection{paragraph}{4}{\z@}%
+		{2.5ex \@plus 1ex \@minus .25ex}%
+		{1.25ex \@plus .25ex}%
+		{\normalfont\normalsize\bfseries}%
+}
+\newcommand\subsubsubsubsection{%
+	\@startsection{subparagraph}{5}{\z@}%
+		{2.5ex \@plus 1ex \@minus .25ex}%
+		{1.25ex \@plus .25ex}%
+		{\normalfont\normalsize\bfseries}%
+}
+\makeatother
+
+\begin{document}
+
+\renewcommand{\labelenumii}{\arabic{enumi}.\arabic{enumii}}
+\renewcommand{\labelenumiii}{\arabic{enumi}.\arabic{enumii}.\arabic{enumiii}}
+\renewcommand{\labelenumiv}{\arabic{enumi}.\arabic{enumii}.\arabic{enumiii}.\arabic{enumiv}}
+
+\thispagestyle{firstpage}
+
+\begin{center}
+\LARGE
+\textbf{arf - Another RPC Framework}\\[6pt]
+\small
+\textbf {Vito Sartori, November 2025}\\[6pt]
+\vskip 25mm
+\end{center}
+
+\begin{abstract}
+	The Another RPC Framework (stylized \texttt{arf}) defines an interface description language (IDL),
+	a compact binary serialization format, and a request/response protocol for service-oriented communication.
+
+	arf aims to provide a simple, evolvable, and highly efficient system for defining structs, services, and
+	RPC methods while eliminating the need for field numeric identifiers in IDL source files. arf emphasizes
+	readability, forward compatibility, and minimal over-the-wire footprint.
+
+\vskip 2mm
+
+\end{abstract}
+
+\pagebreak
+
+\section{Status of This Memo}
+
+	This document is an Internet-Draft and is submitted in full conformance with the provisions of BCP 78
+	and BCP 79.
+
+	Internet-Drafts are working documents of the Internet Engineering Task Force (IETF). They are draft
+	documents valid for a maximum of six months and may be updated, replaced, or obsoleted at any time.
+
+\section{Copyright Notice}
+
+	\begin{flushleft}
+	Copyright \copyright\ 2025 Vito Sartori. All rights reserved.
+	\end{flushleft}
+
+\pagebreak
+
+\tableofcontents
+
+\pagebreak
+
+\section{Introduction}
+
+	arf (Another RPC Framework) is a compact, binary, schema-first RPC mechanism designed for
+	service-oriented systems. arf provides:
+
+	\begin{itemize}
+		\item A simple IDL with packages, imports, structs, and services.
+		\item Efficient binary encoding without field tags on the wire.
+		\item Optional types without nested “option” wrappers.
+		\item Evolvability through package-level versioning.
+		\item Re-openable service definitions for modular organization.
+	\end{itemize}
+
+	arf draws inspiration from Protobuf, Cap’n Proto, and Thrift while focusing on ergonomics and
+	avoiding field-ID management clutter.
+
+
+\section{Conventions and Terminology}
+
+	The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT,
+	RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL in this document are to be
+	interpreted as described in \cite{RFC2119} and \cite{RFC8174} when, and only when, they
+	appear in all capitals.
+
+	\subsubsection{Terms}
+
+		\begin{description}
+			\item[Client] The endpoint that initiates an RPC by sending an
+				\texttt{INVOKE} frame.
+
+			\item[Server] The endpoint that receives an \texttt{INVOKE} frame
+				and executes the corresponding method.
+
+			\item[Endpoint] Either the client or the server participating in an
+				RPC.
+
+			\item[RPC] A single remote procedure call identified by one
+				\texttt{CorrelationID} and consisting of an \texttt{INVOKE} frame
+				and any subsequent frames that share that identifier.
+
+			\item[Frame] A discrete protocol message sent over the underlying
+				transport representing an invocation, stream element, or control
+				signal, as defined in Section~\ref{sec:frame-format}.
+
+			\item[CorrelationID] The identifier that associates all frames
+				belonging to the same RPC on a given connection.
+
+			\item[Active RPC] An RPC for which an \texttt{INVOKE} frame has been sent
+				and for which the RPC completion conditions defined in Section~\ref{sec:rpc-completion}
+				have not yet been satisfied.
+
+			\item[Unary] A non-streaming RPC parameter or result, serialized as
+				a single value rather than as a sequence.
+
+			\item[Stream] A potentially unbounded sequence of values of a given
+				type, carried using \texttt{IN\_STREAM}/\texttt{IN\_CLOSE} or
+				\texttt{OUT\_STREAM}/\texttt{OUT\_CLOSE} frames.
+
+			\item[Input stream] A stream of values flowing from client to
+				server as part of an RPC.
+
+			\item[Output stream] A stream of values flowing from server to
+				client as part of an RPC.
+
+			\item[Form] One of the sixteen method signature combinations
+				defined in Section~\ref{RPC-MethodForms}, derived from the
+				presence or absence of unary input, unary output, input stream,
+				and output stream.
+
+			\item[Struct] A user-defined composite type consisting of a fixed
+				sequence of named fields.
+
+			\item[Field] A named component of a struct, identified for
+				serialization by its ordinal position within the struct
+				declaration.
+
+			\item[Optional field] A struct field whose type is
+				\texttt{optional<T>}, whose presence or absence is indicated by
+				the struct’s presence bitmap.
+
+			\item[Package] A named collection of type and service declarations
+				that forms a versioned namespace boundary, as defined in
+				Section~\ref{sec:structs}.
+
+			\item[Service] A named collection of RPC methods defined within a
+				package.
+
+			\item[Method] A single RPC operation defined within a service,
+				identified by its name and method form.
+
+			\item[VarUInt] The variable-length unsigned integer encoding used
+				for lengths and similar quantities, as defined in
+				Section~\ref{sec:length-encoding}.
+		\end{description}
+
+\section{The arf Language}
+
+	\subsection{Packages}
+
+		An arf source file MUST begin with a \texttt{package} declaration:
+
+		\begin{figure}[htb]
+			\lstinputlisting[language=arf,firstnumber=1]{package.arf}
+		\end{figure}
+
+		Package names establish namespace boundaries and versioning domains.  A
+		package name uniquely identifies all types and services defined within
+		the file.  Each type defined in a package is assigned a fully-qualified
+		name of the form:
+
+		\begin{lstlisting}[language=meta-arf,firstnumber=1]
+<package-name> "." <type-name>
+		\end{lstlisting}
+
+		Example:
+
+		\begin{lstlisting}[language=plain]
+v1beta1.mypackage.OtherName
+		\end{lstlisting}
+
+	\subsection{Imports}
+
+    	A source file MAY include one or more \texttt{import} directives that
+	    logically incorporate definitions from other arf source files:
+
+	    \lstinputlisting[language=arf,firstnumber=1]{import.arf}
+
+	    Each imported file MUST contain a \texttt{package} declaration. The
+	    package name of the imported file determines the fully-qualified names
+	    of the types it defines.
+
+	    An import MAY specify an explicit local alias using the \texttt{as}
+	    keyword. If no alias is provided, the compiler MUST derive an implicit
+	    alias from the final component of the imported package name.
+
+	    All aliases within a single source file MUST be unique. If two imports
+	    would produce the same implicit alias, or if an implicit alias collides
+	    with an explicit alias, the compiler MUST reject the source file.
+
+	    Referenced types of the form \texttt{<alias>.<TypeName>} MUST resolve
+	    unambiguously to exactly one imported package. Fully-qualified names
+	    MAY be used instead of aliases and MUST NOT depend on import aliasing.
+
+	\subsection{Types}
+
+		arf provides a set of builtin types that form the foundation of the
+		serialization model.  These types MAY appear as struct fields, unary
+		method parameters and results, and stream element types.  The builtin
+		types are:
+
+		\begin{itemize}
+			\item \texttt{bool}: a boolean value.
+			\item \texttt{int8}, \texttt{int16}, \texttt{int32}, \texttt{int64}:
+				signed integers of the specified width.
+			\item \texttt{uint8}, \texttt{uint16}, \texttt{uint32}, \texttt{uint64}:
+				unsigned integers of the specified width.
+			\item \texttt{float32}, \texttt{float64}: IEEE~754 binary floating-point values.
+			\item \texttt{string}: a sequence of UTF-8 encoded Unicode scalar values.
+			\item \texttt{bytes}: an arbitrary sequence of octets.
+			\item \texttt{array<T>}: an ordered, variable-length sequence of values of type \texttt{T}.
+			\item \texttt{map<K, V>}: an unordered, variable-length association between
+				keys of type \texttt{K} and values of type \texttt{V}.
+			\item \texttt{optional<T>}: a value of type \texttt{T} that MAY be present or absent.
+		\end{itemize}
+
+		User-defined \texttt{struct} types MAY also be declared within a package.
+		All types, whether builtin or user-defined, participate uniformly in the
+		serialization rules described in Section~\ref{sec:serialization}.
+
+	\subsection{Struct Declarations}
+	\label{sec:structs}
+
+		Structs define a sequence of fields, each consisting of a name and a
+		type, in the order in which they are written:
+
+		\lstinputlisting[language=arf,firstnumber=1]{struct-decl.arf}
+
+		Field numbers MUST NOT appear in arf source files.  Instead, each field
+		is assigned an implicit ordinal index based solely on its position in
+		the declaration, beginning at zero for the first field.  Ordinal indices
+		MUST remain stable within a package version, as they are referenced by
+		the binary serialization rules defined in
+		Section~\ref{sec:serialization}.
+
+		Struct declarations MAY include nested struct definitions.  Nested
+		structs are assigned fully-qualified names in the same manner as
+		top-level structs.
+
+	\subsection{Service Declarations}
+
+		Services define RPC methods:
+
+		\lstinputlisting[language=arf,firstnumber=1]{service-decl.arf}
+
+		Each method name MUST be unique within a service unless the service is
+		re-opened as described below.
+
+	\subsubsection{Re-Openable Services}
+
+		A service MAY be declared in multiple \texttt{service} blocks within the
+		same package:
+
+		\lstinputlisting[language=arf,firstnumber=1]{service-decl-reopen.arf}
+
+		All \texttt{service} blocks with the same service name MUST be merged
+		into a single logical service definition during compilation.  If a
+		method name appears in more than one block, the compiler MUST determine
+		whether the corresponding method signatures are identical.
+
+		Two method declarations are considered to have \emph{identical
+		signatures} if and only if all of the following hold:
+
+		\begin{itemize}
+			\item They declare the same method name.
+			\item They declare the same ordered sequence of unary input parameters.
+			\item They declare the same input stream type (or both omit it).
+			\item They declare the same ordered sequence of unary output values.
+			\item They declare the same output stream type (or both omit it).
+		\end{itemize}
+
+		If any of these conditions is violated, the signatures are divergent,
+		and the compiler MUST reject the program.
+
+	\subsubsection{Methods}
+		\label{sec:methods}
+
+		An arf method signature consists of zero or more unary input parameters,
+		zero or more unary output parameters, and at most one input stream and
+		one output stream.  The presence or absence of each of these components
+		determines a \emph{method form}.  Four independent boolean dimensions
+		are defined:
+
+		\begin{itemize}
+			\item \textbf{HasInput}: whether the method declares at least one unary input parameter.
+			\item \textbf{HasOutput}: whether the method declares at least one unary output value.
+			\item \textbf{HasInputStream}: whether the method declares a single input stream parameter.
+			\item \textbf{HasOutputStream}: whether the method declares a single output stream.
+		\end{itemize}
+
+		The combination of these four booleans yields sixteen method forms.  Each
+		form has a well-defined set of legal frame sequences, as specified in
+		Section~\ref{RPC-MethodForms}.
+
+		Unary inputs and outputs, and streams MUST use structures instead of primitive
+		or composite types. This limitation was deliberately created to ensure all data
+		transmitted through RPC methods are part of structures, enforcing all messages to
+		be explicitly defined.
+
+	\subsubsection{IDL Syntax for Streams}
+
+		Streams are declared using the \texttt{stream} keyword in either the
+		input parameter list or the output tuple.  A method MAY declare at most
+		one input stream and at most one output stream.
+
+		Examples:
+
+		\begin{lstlisting}[language=arf]
+NNYN(stream T);
+NYNY() -> (O, stream U);
+YYYY(i I, stream T) -> (O, stream U);
+		\end{lstlisting}
+
+		A streaming parameter is written as \texttt{stream <Type>}.  Unary
+		parameters are written as standard name--type bindings.  Streams MUST NOT
+		appear more than once on either side of the signature.
+
+	\subsection{Fully-Qualified Names}
+
+    	Every type and service defined within a package is assigned a
+	    fully-qualified name of the form:
+
+    	\begin{lstlisting}[language=meta-arf,firstnumber=1]
+<package-name> "." <identifier>
+	    \end{lstlisting}
+
+    	Fully-qualified names uniquely identify declarations across all
+	    packages. Two declarations with distinct fully-qualified names are
+	    considered distinct, even if their unqualified names are identical or
+	    their definitions are structurally equivalent.
+
+	    Within a source file, references to types defined in other packages
+	    MAY appear in either of the following forms:
+
+    	\begin{itemize}
+        	\item \textbf{Aliased form}: \texttt{<alias>.<TypeName>}, where
+            	\texttt{<alias>} is the explicit or implicit import alias
+              	established by an \texttt{import} directive; or
+        	\item \textbf{Fully-qualified form}: \texttt{<package-name>.<TypeName>}.
+    	\end{itemize}
+
+    	Aliased references MUST resolve unambiguously to exactly one imported
+    	package. Fully-qualified references MUST NOT depend on import aliasing
+    	and MUST resolve solely based on the declared package name.
+
+    	Fully-qualified names MUST remain stable across all files belonging to
+    	the same package version. Changing the package name of any declaration
+    	constitutes a breaking change and therefore requires introducing a new
+    	package version.
+
+\section{Serialization}
+\label{sec:serialization}
+
+	\subsection{Overview}
+
+		arf defines a compact binary serialization format for values of all
+		builtin and user-defined types.  Serialization is deterministic and does
+		not depend on field names or field numbers appearing in the IDL.  Struct
+		fields are serialized in declaration order using implicit ordinal
+		indices as described in Section~\ref{sec:structs}.
+
+		Unless otherwise noted, all integers are encoded in little-endian byte
+		order.  Variable-length entities (such as strings, byte sequences,
+		arrays, and maps) are prefixed with a length encoded using the
+		variable-length integer scheme described in
+		Section~\ref{sec:length-encoding}.
+
+		All serialized representations are self-delimiting and do not require
+		out-of-band framing.  The RPC protocol defines its own framing mechanism
+		for transporting serialized values.
+
+	\subsection{Length Encoding}
+	\label{sec:length-encoding}
+
+		arf uses an unsigned variable-length integer format (referred to in this
+		document as \emph{VarUInt}) for encoding lengths of variable-sized
+		objects.  VarUInt uses a base-128 continuation-bit scheme:
+
+		\begin{itemize}
+			\item Each byte contributes seven bits of payload and one continuation
+				bit.
+			\item For all but the final byte, the most-significant bit (MSB) MUST
+				be set to~1.
+			\item The final byte MUST have its MSB set to~0.
+		\end{itemize}
+
+		This format allows lengths to be encoded using between one and ten
+		bytes, depending on magnitude.  An implementation MUST NOT accept
+		lengths that exceed the representational capacity of a 64-bit unsigned
+		integer.
+
+		Unless explicitly stated, all length-prefixed types in this section use
+		\texttt{VarUInt} for length encoding.
+
+	\subsection{Primitive Types}
+
+		The serialization of primitive types is defined as follows:
+
+		\begin{itemize}
+			\item \textbf{bool}: encoded as a single byte.  The value \texttt{0x00}
+				represents \texttt{false}; the value \texttt{0x01} represents
+				\texttt{true}.  No other values are permitted.
+			\item \textbf{int8}, \textbf{uint8}: encoded as a single byte.
+			\item \textbf{int16}, \textbf{uint16}: encoded as 2~bytes in
+				little-endian order.
+			\item \textbf{int32}, \textbf{uint32}: encoded as 4~bytes in
+				little-endian order.
+			\item \textbf{int64}, \textbf{uint64}: encoded as 8~bytes in
+				little-endian order.
+			\item \textbf{float32}, \textbf{float64}: encoded in IEEE~754 binary32
+				or binary64 format respectively, using little-endian byte order.
+			\item \textbf{string}: encoded as \texttt{VarUInt(length)} followed by
+				\texttt{length} bytes containing UTF-8 encoded scalar values.
+				Invalid UTF-8 byte sequences MUST cause deserialization to fail.
+			\item \textbf{bytes}: encoded as \texttt{VarUInt(length)} followed by
+				\texttt{length} raw octets.
+		\end{itemize}
+
+		These encodings are used uniformly whether a primitive appears as a
+		struct field. However, primitives cannot be used as unary method parameters,
+		unary method results, or a stream elements. For methods, structs must be used,
+		as specified in Section~\ref{sec:methods}.
+
+	\subsection{Composite Types}
+
+		Composite types define container-like structures with their own encoding
+		rules.
+
+		\subsubsection{Arrays}
+
+			An \texttt{array<T>} value is encoded as:
+
+			\begin{enumerate}
+				\item \texttt{VarUInt(n)}, where $n$ is the number of elements.
+				\item The concatenation of the serialized representations of the $n$
+					elements in order.
+			\end{enumerate}
+
+			An array MAY be empty.  Empty arrays are encoded as \texttt{VarUInt(0)}
+			followed by zero bytes.
+
+		\subsubsection{Maps}
+
+			A \texttt{map<K, V>} value is encoded as:
+
+			\begin{enumerate}
+			  \item \texttt{VarUInt(n)}, where $n$ is the number of key--value pairs.
+			  \item For each pair, the serialized key immediately followed by the
+					serialized value.
+			\end{enumerate}
+
+			A map MAY be empty.  Map iteration order MUST be the order chosen by the
+			encoder and MUST be preserved by the decoder without implying semantic
+			ordering or sorting.
+
+			Keys MUST be unique according to the equality semantics of type
+			\texttt{K}.  Deserializers MUST reject maps that contain duplicate keys.
+
+		\subsubsection{Structs}
+
+			Structs are serialized field-by-field in the order declared in the IDL.
+			No field numbers or tag identifiers appear on the wire; fields are
+			identified solely by their ordinal position within the struct.
+
+			Let a struct contain $m$ fields.  Struct serialization proceeds as follows:
+
+			\begin{enumerate}
+				\item Emit a presence bitmap with \emph{exactly $m$ bits}, encoded
+					in whole bytes, least-significant bit first.
+					The $i$th bit corresponds to the $i$th field in declaration
+					order.
+					\begin{itemize}
+						\item For a non-optional field, the bit \emph{MUST} be set to~1.
+						\item For an \texttt{optional<T>} field, the bit is set to~1 if
+							the value is present and to~0 if the value is absent.
+					\end{itemize}
+
+				\item For each field $i$ in declaration order:
+					\begin{itemize}
+						\item If the presence bit for field $i$ is~1, serialize the
+							value according to the rules for its type.
+						\item If the presence bit for field $i$ is~0, no bytes are
+							emitted for that field; this case is only legal for
+							\texttt{optional<T>} fields.
+					\end{itemize}
+			\end{enumerate}
+
+			Decoders \emph{MUST} ignore bitmap bits beyond the set of fields
+			they recognize.  When encountering a set bit corresponding to an
+			unknown field, the decoder \emph{MUST} skip the value by applying
+			the serialization rules of the field's declared type.
+
+			Because field ordinals define the on-wire layout, implementations
+			\emph{MUST NOT} reorder fields within a package version.
+
+	\subsection{Optional Fields}
+
+		An \texttt{optional<T>} value MAY be present or absent.  Optional fields
+		in structs use the presence bitmap described above.  Any other type or
+		composite type may be used as \texttt{T}.
+
+	\subsection{Error Handling}
+
+		A deserializer MUST reject any of the following:
+
+		\begin{itemize}
+			\item malformed VarUInt encodings,
+			\item lengths that exceed the remaining buffer,
+			\item invalid UTF-8 in \texttt{string} values,
+			\item duplicate keys in a \texttt{map<K,V>},
+			\item unexpected trailing bytes after a serialized value,
+			\item any violation of the structural constraints defined in this section.
+		\end{itemize}
+
+		Unless explicitly specified, deserialization errors MUST be treated as
+		fatal to the enclosing RPC invocation.
+
+
+\section{RPC Protocol}
+\label{sec:rpc-protocol}
+
+	arf defines a bidirectional message-oriented protocol used to transport
+	serialized request and response values between a client and a server.
+	This section defines the framing model, identifier space, message
+	semantics, and the legal frame sequences for each method form defined in
+	Section~\ref{RPC-MethodForms}.
+
+	Unless otherwise noted, all multi-byte integer fields are encoded in
+	little-endian byte order.  All frames are self-contained and do not rely
+	on lower-layer segmentation semantics.
+
+	\subsection{Frame Format}
+	\label{sec:frame-format}
+
+		Each message exchanged between a client and server is encoded as an arf
+		\emph{frame}.  Frames MUST NOT be fragmented or interleaved at the byte
+		level.  The format of a frame is:
+
+		\begin{center}
+			\begin{tabular}{@{}ll@{}}
+				\toprule
+					Field					& Description \\ \midrule
+					Magic[2]				& Fixed value \texttt{0xAF 0x01} identifying arf framing. \\
+					Version[1]				& Protocol version.  This document specifies version~1. \\
+					MessageKind[1]			& Indicates the semantic type of the frame. \\
+					Flags[1]				& Reserved for future use; MUST be zero for version~1. \\
+					PackageID[4]			& Identifier for the package containing the service. \\
+					ServiceID[4]			& Identifier for the service. \\
+					MethodID[4]				& Identifier for the method. \\
+					CorrelationID[8]		& Opaque identifier linking frames belonging to the same RPC. \\
+					PayloadLength (var)		& Length of the payload using VarUInt encoding. \\
+					Payload (var)			& Serialized value according to Section~\ref{sec:serialization}. \\
+				\bottomrule
+			\end{tabular}
+		\end{center}
+
+		All frames MUST begin with the 2-byte magic value.  Receivers MUST treat
+		a mismatched magic value as a framing error and close the connection.
+
+		\paragraph{MessageKind}
+
+			The \texttt{MessageKind} byte MUST be one of the following:
+
+			\begin{center}
+				\begin{tabular}{@{}ll@{}}
+					\toprule
+						Value & Meaning \\ \midrule
+						0x01  & \texttt{INVOKE}: initiates an RPC call. \\
+						0x02  & \texttt{IN\_STREAM}: element of an input stream. \\
+						0x03  & \texttt{IN\_CLOSE}: signals end of input stream. \\
+						0x04  & \texttt{OUT\_STREAM}: element of an output stream. \\
+						0x05  & \texttt{OUT\_CLOSE}: signals end of output stream. \\
+						0x06  & \texttt{RESPONSE}: unary output payload. \\
+						0x07  & \texttt{ERROR}: terminal error. \\
+						0x08  & \texttt{CANCEL}: client cancellation of the RPC. \\
+					\bottomrule
+				\end{tabular}
+			\end{center}
+
+		\subsection{Transport Assumptions}
+		\label{sec:transport-assumptions}
+
+			arf is designed to run over a reliable, ordered, bidirectional transport.
+			The transport MUST preserve byte order and MUST NOT duplicate or reorder
+			bytes.  Examples of suitable transports include TCP connections, QUIC
+			streams, and Unix domain sockets.
+
+			arf frames, as defined in Section~\ref{sec:frame-format}, are logical
+			protocol units and do not necessarily correspond to transport-level
+			segments.  Endpoints MUST be able to reconstruct frames from an
+			arbitrary segmentation of the underlying byte stream.
+
+			Datagram-oriented transports (such as bare UDP) do not satisfy these
+			requirements without additional reliability and ordering mechanisms.
+			Such mechanisms are out of scope for this specification.
+
+		\subsection{Connection Model and Multiplexing}
+		\label{sec:multiplexing}
+
+			arf is designed to support multiplexing of multiple RPCs over a single
+			transport connection.  A connection is viewed as a bidirectional stream
+			of frames as defined in Section~\ref{sec:frame-format}.
+
+			\subsubsection{Correlation Identifiers}
+
+				The \texttt{CorrelationID} field in each frame identifies the logical
+				RPC to which the frame belongs.  The following rules apply:
+
+				\begin{itemize}
+					\item For a given connection, the client MUST choose a
+						\texttt{CorrelationID} that is not currently active when
+						initiating a new RPC.
+
+					\item An RPC becomes active when its \texttt{INVOKE} frame is sent.
+						It remains active until the RPC completion conditions defined in
+						Section~\ref{sec:rpc-completion} are satisfied.
+
+					\item Once an RPC has completed, its \texttt{CorrelationID} MAY be
+						reused for a subsequent RPC on the same connection.
+				\end{itemize}
+
+				Implementations MUST treat the receipt of frames for an unknown or
+				inactive \texttt{CorrelationID} (that is, a \texttt{CorrelationID} for
+				which no active RPC exists) as a protocol error.
+
+			\subsubsection{Concurrent RPCs}
+
+				Clients MAY initiate multiple RPCs concurrently over the same
+				connection by sending multiple \texttt{INVOKE} frames with distinct
+				\texttt{CorrelationID} values.  Similarly, servers MAY process multiple
+				RPCs concurrently and interleave frames for those RPCs arbitrarily.
+
+				For each individual \texttt{CorrelationID}, the following invariants
+				MUST hold:
+
+				\begin{itemize}
+					\item Exactly one \texttt{INVOKE} frame MUST appear, and it MUST be
+						the first frame for that \texttt{CorrelationID}.
+
+					\item All subsequent frames with that \texttt{CorrelationID} MUST
+						conform to the method form and sequencing rules defined in
+						Section~\ref{RPC-MethodForms}.
+
+					\item Once the RPC completion conditions defined in
+						Section~\ref{sec:rpc-completion} have been satisfied,
+						endpoints MUST treat the \texttt{CorrelationID} as inactive and
+						MUST NOT send further frames for that \texttt{CorrelationID}.
+				\end{itemize}
+
+				Frames belonging to different \texttt{CorrelationID} values MAY be
+				arbitrarily interleaved in both directions, subject to any flow-control
+				or prioritization policies implemented by the endpoints.
+
+		\subsubsection{Ordering Guarantees}
+
+			The transport MUST preserve byte order, and endpoints MUST preserve the
+			frame order in which data is received.  As a consequence:
+
+			\begin{itemize}
+				\item For a given \texttt{CorrelationID}, the sequence of frames is
+					strictly ordered and can be processed in order.
+				\item No ordering guarantees are provided between frames belonging to
+					different \texttt{CorrelationID} values beyond those implied by
+					the underlying transport.
+			\end{itemize}
+
+			arf does not define fairness or prioritization between concurrent RPCs.
+			Such policies are implementation-specific and MAY be influenced by
+			application-level considerations.
+
+	\subsection{Identifiers}
+	\label{sec:identifiers}
+
+		PackageID, ServiceID, and MethodID are 32-bit unsigned integers derived
+		from stable hashing of fully-qualified names.  The hashing algorithm
+		MUST be deterministic and MUST produce identical identifiers across all
+		conforming implementations.
+
+		The identifier derivation scheme is intentionally opaque in arf source
+		files and MUST NOT be user-configurable.  Identifiers MUST remain
+		stable for the lifetime of a package version.  Changing any identifier
+		constitutes a breaking change requiring a new package version.
+
+	\subsection{Requests}
+	\label{sec:requests}
+
+		An RPC request is initiated by the client sending an \texttt{INVOKE}
+		frame.  The payload of the \texttt{INVOKE} frame depends on the method
+		form:
+
+		\begin{itemize}
+			\item If \textbf{HasInput} is true, the payload MUST contain the
+				serialization of the unary input struct.
+			\item If \textbf{HasInput} is false, the payload MUST be empty.
+			\item If \textbf{HasInputStream} is true, the input stream is
+				considered open immediately after the \texttt{INVOKE} frame.  The
+				client MAY send zero or more \texttt{IN\_STREAM} frames, followed
+				by exactly one \texttt{IN\_CLOSE}.
+		\end{itemize}
+
+		A client MUST NOT send additional \texttt{INVOKE} frames with the same
+		\texttt{CorrelationID}.  Doing so constitutes a protocol error.
+
+		\subsection{Method Forms and Allowed Frame Sequences}
+		\label{RPC-MethodForms}
+
+			arf defines sixteen distinct \emph{method forms}, derived from the
+			presence or absence of: (1) unary input parameters, (2) unary output
+			values, (3) an input stream, and (4) an output stream.  The four-letter
+			form label encodes the booleans \texttt{HasInput}, \texttt{HasOutput},
+			\texttt{HasInputStream}, and \texttt{HasOutputStream}, respectively,
+			using \texttt{Y} for ``present'' and \texttt{N} for ``absent''.
+
+			Table~\ref{tab:method-forms} specifies, for each form, whether the
+			client and server MAY send the streaming frame kinds defined in
+			Section~\ref{sec:frame-format}.  Frames belonging to different
+			\texttt{CorrelationID} values MAY be arbitrarily interleaved on the same
+			connection, as described in Section~\ref{sec:multiplexing}.
+
+			\begin{table}[htb]
+				\centering
+				\caption{arf Method Forms and Permitted Streaming Frames (per \texttt{CorrelationID})}
+				\label{tab:method-forms}
+				\begin{tabular}{lcccccccc}
+					\toprule
+					Form &
+					HasIn &
+					HasOut &
+					HasInS &
+					HasOutS &
+					C:IS &
+					C:IC &
+					S:OS &
+					S:OC \\
+					\midrule
+					NNNN & N & N & N & N & N & N & N & N \\
+					NNNY & N & N & N & Y & N & N & Y & Y \\
+					NNYN & N & N & Y & N & Y & Y & N & N \\
+					NNYY & N & N & Y & Y & Y & Y & Y & Y \\
+					NYNN & N & Y & N & N & N & N & N & N \\
+					NYNY & N & Y & N & Y & N & N & Y & Y \\
+					NYYN & N & Y & Y & N & Y & Y & N & N \\
+					NYYY & N & Y & Y & Y & Y & Y & Y & Y \\
+					YNNN & Y & N & N & N & N & N & N & N \\
+					YNNY & Y & N & N & Y & N & N & Y & Y \\
+					YNYN & Y & N & Y & N & Y & Y & N & N \\
+					YNYY & Y & N & Y & Y & Y & Y & Y & Y \\
+					YYNN & Y & Y & N & N & N & N & N & N \\
+					YYNY & Y & Y & N & Y & N & N & Y & Y \\
+					YYYN & Y & Y & Y & N & Y & Y & N & N \\
+					YYYY & Y & Y & Y & Y & Y & Y & Y & Y \\
+					\bottomrule
+				\end{tabular}
+			\end{table}
+
+			\noindent
+			Legend:
+
+			\begin{itemize}
+				\item HasIn  = HasInput
+				\item HasOut = HasOutput
+				\item HasInS = HasInputStream
+				\item HasOutS = HasOutputStream
+				\item C:IS = client MAY send \texttt{IN\_STREAM}
+				\item C:IC = client MAY send \texttt{IN\_CLOSE}
+				\item S:OS = server MAY send \texttt{OUT\_STREAM}
+				\item S:OC = server MAY send \texttt{OUT\_CLOSE}
+			\end{itemize}
+
+			For each form, the following additional constraints apply, per
+			\texttt{CorrelationID}:
+
+			\begin{itemize}
+				\item Exactly one \texttt{INVOKE} frame MUST be sent, and it MUST be
+					the first frame.
+				\item If HasInS is \texttt{Y}, the client MAY send zero or more
+					\texttt{IN\_STREAM} frames followed by exactly one
+					\texttt{IN\_CLOSE}.  If HasInS is \texttt{N}, the client MUST
+					NOT send \texttt{IN\_STREAM} or \texttt{IN\_CLOSE}.
+				\item If HasOutS is \texttt{Y}, the server MAY send zero or more
+					\texttt{OUT\_STREAM} frames followed by exactly one
+					\texttt{OUT\_CLOSE}.  If HasOutS is \texttt{N}, the server MUST
+					NOT send \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE}.
+			\end{itemize}
+
+		\subsubsection{RPC Completion}
+		\label{sec:rpc-completion}
+
+			For a given \texttt{CorrelationID}, an RPC is considered complete
+			when one of the following conditions holds:
+
+			\begin{itemize}
+				\item An \texttt{ERROR} frame has been received, or
+				\item A \texttt{CANCEL} frame has been received, or
+				\item A \texttt{RESPONSE} frame has been received and all streams
+					declared by the method form have been closed:
+					\begin{itemize}
+						\item if \textbf{HasInputStream} is \texttt{true}, an
+							\texttt{IN\_CLOSE} frame has been received; and
+						\item if \textbf{HasOutputStream} is \texttt{true}, an
+							\texttt{OUT\_CLOSE} frame has been received.
+					\end{itemize}
+			\end{itemize}
+
+			Once any of the above conditions is satisfied, endpoints MUST treat
+			the \texttt{CorrelationID} as inactive and MUST NOT send further
+			frames with that \texttt{CorrelationID}.
+
+	\subsection{Interleaving of Input and Output Streams}
+
+		For method forms that declare both an input stream and an output
+		stream (i.e., \textbf{HasInputStream} = true and
+		\textbf{HasOutputStream} = true), the client and server MAY send
+		\texttt{IN\_STREAM} and \texttt{OUT\_STREAM} frames in any order,
+		including arbitrarily interleaved.  Neither endpoint is required to
+		await stream activity from the peer before sending additional
+		elements.
+
+		Stream directions are independent: the client MAY continue sending
+		input elements regardless of whether the server is actively sending
+		output elements, and vice versa.
+
+	\subsection{Unary vs Streaming Semantics}
+
+		\subsubsection{Unary Input}
+			If \textbf{HasInput} is true, the \texttt{INVOKE} payload MUST contain a
+			serialized unary input struct.  If false, the payload MUST be empty.
+
+		\subsubsection{Input Stream}
+			If \textbf{HasInputStream} is true:
+
+			\begin{itemize}
+				\item The client MAY send zero or more \texttt{IN\_STREAM} frames.
+				\item Each \texttt{IN\_STREAM} frame MUST contain exactly one serialized
+					element of the declared input stream type.
+				\item The client MUST send exactly one \texttt{IN\_CLOSE}.
+				\item After \texttt{IN\_CLOSE}, no further inbound stream frames are
+					permitted.
+			\end{itemize}
+
+		\subsubsection{Unary Output}
+
+			For every RPC that completes successfully (that is, does not terminate
+			with an \texttt{ERROR} frame), the server MUST send exactly one
+			\texttt{RESPONSE} frame for the corresponding \texttt{CorrelationID},
+			regardless of whether the method declares no unary outputs, one or more
+			unary outputs, an output stream, or any combination thereof.
+
+			The \texttt{RESPONSE} frame MUST be the first application-level
+			frame sent by the server for that \texttt{CorrelationID}.  In
+			particular, the server MUST NOT send any \texttt{OUT\_STREAM} or
+			\texttt{OUT\_CLOSE} frames before the \texttt{RESPONSE} frame.
+
+			If \textbf{HasOutput} is \texttt{true}, the payload of the
+			\texttt{RESPONSE} frame MUST contain the serialized unary output
+			struct or tuple.  If \textbf{HasOutput} is \texttt{false}, the payload
+			of the \texttt{RESPONSE} frame MUST be empty.
+
+		\subsubsection{Unary Output Ordering}
+
+			For all method forms in which \textbf{HasOutput} is true, the server
+			MUST send the \texttt{RESPONSE} frame before transmitting any
+			\texttt{OUT\_STREAM} frames.  Once \texttt{RESPONSE} has been sent,
+			the server MAY interleave \texttt{OUT\_STREAM} frames with incoming
+			\texttt{IN\_STREAM} frames arbitrarily.
+
+		\subsubsection{Output Stream}
+
+			If \textbf{HasOutputStream} is \texttt{true}, the server MAY produce an
+			output stream \emph{after} sending the \texttt{RESPONSE} frame.
+
+			In that case, the following rules apply for the given
+			\texttt{CorrelationID}:
+
+			\begin{itemize}
+				\item The server MAY send zero or more \texttt{OUT\_STREAM} frames.
+				\item Each \texttt{OUT\_STREAM} frame MUST contain exactly one
+					serialized element of the declared output stream type.
+				\item The server MUST send exactly one \texttt{OUT\_CLOSE} frame to
+					indicate the end of the output stream.
+				\item The server MUST NOT send any \texttt{OUT\_STREAM} or
+					\texttt{OUT\_CLOSE} frames before the \texttt{RESPONSE} frame.
+				\item After sending \texttt{OUT\_CLOSE}, the server MUST NOT send any
+					further \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} frames for
+					that \texttt{CorrelationID}.
+			\end{itemize}
+
+			Thus, for methods with \textbf{HasOutputStream} set to \texttt{true},
+			the canonical successful server-side sequence (ignoring input frames)
+			is:
+
+			\begin{lstlisting}[language=plain]
+RESPONSE
+OUT_STREAM*   // zero or more times
+OUT_CLOSE
+			\end{lstlisting}
+
+	\subsection{Per-form Examples}
+
+		This subsection provides illustrative but non-normative examples of
+		legal frame sequences for selected method forms.  Let \texttt{CID} be a
+		CorrelationID.
+
+		\subsubsection{Form: NNNN (no input, no output, no streams)}
+
+			\begin{lstlisting}[language=plain]
+INVOKE(CID)
+RESPONSE(CID)
+			\end{lstlisting}
+
+		\subsubsection{Form: NNNY (server-streaming only)}
+
+			\begin{lstlisting}[language=plain]
+INVOKE(CID)
+RESPONSE(CID)
+OUT_STREAM(CID)
+OUT_STREAM(CID)
+OUT_CLOSE(CID)
+			\end{lstlisting}
+
+		\subsubsection{Form: YNYN (unary input, input stream, no unary output)}
+
+			\begin{lstlisting}[language=plain]
+INVOKE(CID, unary-input)
+RESPONSE(CID)   // empty response
+IN_STREAM(CID, T)
+IN_STREAM(CID, T)
+IN_CLOSE(CID)
+			\end{lstlisting}
+
+		\subsubsection{Form: YYYY (full bidirectional streaming + unary input/output)}
+
+
+			\begin{lstlisting}[language=plain]
+INVOKE(CID, unary-input)
+IN_STREAM(CID, T)
+IN_STREAM(CID, T)
+IN_CLOSE(CID)
+
+RESPONSE(CID, unary-output)
+
+OUT_STREAM(CID, U)
+OUT_STREAM(CID, U)
+OUT_CLOSE(CID)
+			\end{lstlisting}
+
+
+	\subsection{Cancellation and Error Semantics}
+
+		A client MAY abort an ongoing RPC using a \texttt{CANCEL} frame with the
+		same \texttt{CorrelationID} as the active call.  Upon receiving
+		\texttt{CANCEL}, the server:
+
+		\begin{itemize}
+			\item MUST cease sending further frames for that \texttt{CorrelationID},
+			\item MAY release any associated resources immediately,
+			\item MAY send an \texttt{ERROR} frame if additional diagnostic
+				information is available.
+		\end{itemize}
+
+		A server MAY emit an \texttt{ERROR} frame at any time to signal an
+		irrecoverable condition.  Upon receiving \texttt{ERROR}, the client MUST
+		treat the RPC as terminated and MUST NOT send additional frames for that
+		\texttt{CorrelationID}.
+
+	\subsection{Backpressure}
+
+		arf does not define a mandatory flow-control mechanism.  Implementations
+		SHOULD apply backpressure using transport-level or application-level
+		means.  Implementations MUST remain robust in the presence of senders
+		that produce data more rapidly than the receiver can process.
+
+		Extensions to provide explicit credit-based flow control MAY be defined
+		in future versions of this specification.
+
+\section{Evolution and Compatibility}
+\label{sec:evolution}
+
+	arf is designed to permit incremental schema evolution without requiring
+	explicit field identifiers in source files.  The rules in this section
+	govern how types may change across package versions while maintaining
+	compatibility at the binary level.
+
+	\subsection{Adding Fields}
+
+		New fields MAY be appended to the end of an existing struct.  Because
+		field ordinal indices are defined by declaration order, appending a
+		field assigns it the next available ordinal.  Existing fields MUST NOT
+		change ordinal indices.
+
+		Receivers MUST ignore trailing fields they do not recognize.  Senders
+		MAY omit trailing fields during serialization.  These rules allow new
+		fields to be introduced in a backward-compatible and forward-compatible
+		manner.
+
+		New fields SHOULD be declared as \texttt{optional<T>} unless the type
+		definition clearly requires the field to be present for semantic
+		correctness.  Optional fields preserve maximal flexibility for
+		evolution.
+
+	\subsection{Removing Fields}
+
+		Fields MUST NOT be removed from a struct in a way that changes existing
+		ordinal indices.  Instead, a field that is no longer used SHOULD be
+		marked with the \texttt{@deprecated} attribute and retained with its
+		original ordinal.
+
+		Senders SHOULD omit deprecated fields.  Receivers MUST ignore deprecated
+		fields if they appear.
+
+		If a field must be fully removed, its removal MUST occur only in a new,
+		distinct package version (see Section~\ref{sec:versioning}).  Cross-version
+		compatibility between packages is not required.
+
+	\subsection{Changing Types}
+
+		A field's type MUST NOT change within the same package version.  Any
+		change in type—including widening (e.g., \texttt{int32} to
+		\texttt{int64}), narrowing, or structural changes—MUST be treated as a
+		backward-incompatible modification.
+
+		Type changes MUST be performed only within a new package version
+		boundary.
+
+		Changing a field from a concrete type to \texttt{optional<T>} MAY be
+		performed only if the wire encoding remains identical when the value is
+		present and if receivers can safely interpret the absence of the field
+		as the ``not present'' state.
+
+		Changing a field from \texttt{optional<T>} to a non-optional type is
+		not compatible and MUST NOT be performed within the same package
+		version.
+
+	\subsection{Versioning Through Packages}
+	\label{sec:versioning}
+
+		arf relies on the \texttt{package} namespace as the primary unit of
+		versioning.  A change that violates any of the compatibility rules in
+		this section MUST be introduced under a new package name.
+
+		Package names SHOULD include a stability level (e.g.,
+		\texttt{v1beta1}, \texttt{v1}, \texttt{v2}) to provide clear evolution
+		points.  Implementations MAY simultaneously support multiple package
+		versions.
+
+		No cross-package binary compatibility is required or implied.  Changes
+		within a package version MUST adhere to the evolution rules above.
+		
+\section{ABNF Grammar}
+
+This section provides the normative syntax of the arf source language,
+expressed using Augmented Backus–Naur Form (ABNF) as defined in
+RFC~5234 and RFC~7405.  ABNF rules specify the lexical and syntactic
+structure of valid arf source files.  The grammar below is complete
+for this specification.
+
+\begin{quote}
+\begin{alltt}
+arf-source        = *c-nl source-root *c-nl
+
+; COMMON DEFINITIONS
+
+CRLF              = (CR LF) / LF
+
+ident             = ALPHA *(ALPHA / DIGIT / "_")
+
+semi              = ";" *WSP *c-nl
+
+c-nl              = comment / CRLF  ; comment line or a bare newline
+
+comment           = "#" *(WSP / VCHAR) CRLF
+
+snake-ident       = (%x61-7A / "_") *(%x61-7A / "_" / DIGIT)
+
+screaming-snake-ident =
+                    (%x41-5A / "_") *(%x41-5A / "_" / DIGIT)
+
+camel-ident       = %x41-5A *(ALPHA / DIGIT)
+
+; TYPES
+
+type              = composite-type / plain-type
+
+plain-type        = snake-ident / camel-ident
+
+composite-type    = optional-type / array-type / map-type
+
+optional-type     = "optional<" *WSP type *WSP ">"
+
+array-type        = "array<" *WSP type *WSP ">"
+
+map-type          = "map<" *WSP type *WSP "," *WSP type *WSP ">"
+
+stream            = "stream" 1*WSP type
+
+; SOURCE ROOT
+
+source-root       = package *c-nl imports *c-nl definitions *c-nl
+
+definitions       = *(*c-nl definition *c-nl)
+
+definition        = struct / enum / service
+
+; PACKAGE
+
+package           = "package" 1*WSP package-name *WSP semi
+
+package-name      = ident *("." ident)
+
+; IMPORTS
+
+imports           = *c-nl *("import" 1*WSP import-path semi)
+
+import-path       = *WSP DQUOTE import-components DQUOTE *WSP
+
+import-components = 1*(ALPHA / DIGIT / "-" / "_" / "/" / ".")
+
+; ANNOTATIONS
+
+annotations       = *(annotation)
+
+annotation        = "@" snake-ident *WSP
+                    [ "(" *annotation-params ")" ]
+                    *WSP *c-nl
+
+annotation-params = annotation-param *("," annotation-param)
+
+annotation-param  = DQUOTE *VCHAR DQUOTE
+
+; STRUCT
+
+struct            = annotations struct-def struct-body *c-nl
+
+struct-def        = "struct" 1*WSP camel-ident *WSP
+
+struct-body       = "{" *struct-elements "}" *WSP *c-nl
+
+struct-elements   = *(c-nl / struct-field / struct)
+
+struct-field      = annotations *CRLF *WSP
+                    snake-ident 1*WSP type semi
+
+; ENUM
+
+enum              = annotations enum-def enum-body *c-nl
+
+enum-def          = "enum" 1*WSP camel-ident *WSP
+
+enum-body         = "{" *enum-elements "}" *WSP *c-nl
+
+enum-elements     = *(c-nl / WSP / enum-value)
+
+enum-value        = annotations *CRLF *WSP
+                    screaming-snake-ident *WSP
+                    "=" *WSP 1*DIGIT semi
+
+; SERVICE
+
+service           = annotations service-def service-body *c-nl
+
+service-def       = "service" 1*WSP camel-ident *WSP
+
+service-body      = "{" *service-elements "}" *WSP *c-nl
+
+service-elements  = *(c-nl / WSP / service-rpc)
+
+service-rpc       = service-rpc-prelude
+                    service-rpc-params
+                    [ service-rpc-returns ]
+                    semi
+
+service-rpc-prelude =
+                    annotations *CRLF *WSP camel-ident *WSP
+
+service-rpc-params =
+                    "(" *service-rpc-input ")" *WSP
+
+service-rpc-input =
+                    stream /
+                    (snake-ident 1*WSP type
+                     *(*WSP "," *WSP snake-ident 1*WSP type)
+                     [*WSP "," stream])
+
+service-rpc-returns =
+                    "->" (
+                      (*WSP type *WSP) /
+                      ("(" *WSP type *WSP
+                        *("," *WSP type *WSP)
+                        [*WSP stream] *WSP ")") /
+                      (*WSP stream *WSP)
+                    )
+\end{alltt}
+\end{quote}
+
+\section{Security Considerations}
+
+	arf describes a serialization format and an RPC protocol but does not
+	mandate any particular transport security mechanism.  When deployed over
+	an untrusted network, implementations MUST provide confidentiality,
+	integrity, and endpoint authentication using a transport such as TLS \cite{RFC8446},
+	QUIC \cite{RFC9000} with TLS 1.3 \cite{RFC9001}, or an equivalent secure channel.
+
+	Endpoints MUST validate that incoming frames conform to the arf framing
+	rules, including length fields, frame ordering constraints, and stream
+	termination semantics.  Malformed or truncated frames MUST result in
+	termination of the associated \texttt{CorrelationID} and SHOULD result
+	in connection closure.
+
+	Implementations MUST impose limits on:
+	\begin{itemize}
+		\item maximum frame length,
+		\item maximum number of concurrent \texttt{CorrelationID} streams,
+		\item maximum nesting depth for type decoding,
+		\item maximum aggregate memory per connection.
+	\end{itemize}
+
+	These limits prevent resource exhaustion attacks.
+
+	Optional fields and variable-length structures (arrays, maps, byte
+	sequences) MUST be validated before allocation.  Implementations MUST
+	reject encodings that imply unreasonable memory commitments.
+
+	Method names, package names, and type names are not security boundaries.
+	Applications MAY impose authorization checks based on method identity,
+	but such checks are outside the scope of this specification.
+
+	Applications that embed sensitive data in arf messages MUST consider
+	application-level encryption or tokenization if end-to-end confidentiality
+	is required beyond the transport layer.
+
+\section{IANA Considerations}
+
+	This document makes no requests of the IANA.
+
+	Future versions of arf MAY define frame-type registries or well-known
+	package namespaces.  Such extensions MUST define their own IANA
+	interactions as appropriate.
+
+\section{References}
+\printbibliography[heading=none,resetnumbers=true]
+
+\section{Acknowledgements}
+
+	The author thanks the contributors to early discussions on arf's design,
+	particularly those who provided feedback on streaming semantics, package
+	versioning, and binary framing constraints.
+
+	The structure and terminology of this document were influenced by the
+	style of the IETF and prior work on schema-based RPC systems, including
+	Protocol Buffers, Cap’n Proto, and Thrift.
+
+\end{document}

@@ -1,0 +1,7 @@
+service NameService {
+    check_name(req CheckNameRequest) -> common.CheckNameResponse;
+}
+
+service NameService {
+    check_slug(req CheckSlugRequest) -> common.CheckSlugResponse;
+}
