@@ -14,6 +14,7 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{tikz}
+\usepackage{fancyvrb}
 \usetikzlibrary{matrix,fit}
 
 \usepackage[
@@ -1202,7 +1203,7 @@ OUT_CLOSE(CID)
 
 		No cross-package binary compatibility is required or implied.  Changes
 		within a package version MUST adhere to the evolution rules above.
-		
+
 \section{ABNF Grammar}
 
 This section provides the normative syntax of the arf source language,
@@ -1212,141 +1213,8 @@ structure of valid arf source files.  The grammar below is complete
 for this specification.
 
 \begin{quote}
-\begin{alltt}
-arf-source        = *c-nl source-root *c-nl
-
-; COMMON DEFINITIONS
-
-CRLF              = (CR LF) / LF
-
-ident             = ALPHA *(ALPHA / DIGIT / "_")
-
-semi              = ";" *WSP *c-nl
-
-c-nl              = comment / CRLF  ; comment line or a bare newline
-
-comment           = "#" *(WSP / VCHAR) CRLF
-
-snake-ident       = (%x61-7A / "_") *(%x61-7A / "_" / DIGIT)
-
-screaming-snake-ident =
-                    (%x41-5A / "_") *(%x41-5A / "_" / DIGIT)
-
-camel-ident       = %x41-5A *(ALPHA / DIGIT)
-
-; TYPES
-
-type              = composite-type / plain-type
-
-plain-type        = snake-ident / camel-ident
-
-composite-type    = optional-type / array-type / map-type
-
-optional-type     = "optional<" *WSP type *WSP ">"
-
-array-type        = "array<" *WSP type *WSP ">"
-
-map-type          = "map<" *WSP type *WSP "," *WSP type *WSP ">"
-
-stream            = "stream" 1*WSP type
-
-; SOURCE ROOT
-
-source-root       = package *c-nl imports *c-nl definitions *c-nl
-
-definitions       = *(*c-nl definition *c-nl)
-
-definition        = struct / enum / service
-
-; PACKAGE
-
-package           = "package" 1*WSP package-name *WSP semi
-
-package-name      = ident *("." ident)
-
-; IMPORTS
-
-imports           = *c-nl *("import" 1*WSP import-path semi)
-
-import-path       = *WSP DQUOTE import-components DQUOTE *WSP
-
-import-components = 1*(ALPHA / DIGIT / "-" / "_" / "/" / ".")
-
-; ANNOTATIONS
-
-annotations       = *(annotation)
-
-annotation        = "@" snake-ident *WSP
-                    [ "(" *annotation-params ")" ]
-                    *WSP *c-nl
-
-annotation-params = annotation-param *("," annotation-param)
-
-annotation-param  = DQUOTE *VCHAR DQUOTE
-
-; STRUCT
-
-struct            = annotations struct-def struct-body *c-nl
-
-struct-def        = "struct" 1*WSP camel-ident *WSP
-
-struct-body       = "{" *struct-elements "}" *WSP *c-nl
-
-struct-elements   = *(c-nl / struct-field / struct)
-
-struct-field      = annotations *CRLF *WSP
-                    snake-ident 1*WSP type semi
-
-; ENUM
-
-enum              = annotations enum-def enum-body *c-nl
-
-enum-def          = "enum" 1*WSP camel-ident *WSP
-
-enum-body         = "{" *enum-elements "}" *WSP *c-nl
-
-enum-elements     = *(c-nl / WSP / enum-value)
-
-enum-value        = annotations *CRLF *WSP
-                    screaming-snake-ident *WSP
-                    "=" *WSP 1*DIGIT semi
-
-; SERVICE
-
-service           = annotations service-def service-body *c-nl
-
-service-def       = "service" 1*WSP camel-ident *WSP
-
-service-body      = "{" *service-elements "}" *WSP *c-nl
-
-service-elements  = *(c-nl / WSP / service-rpc)
-
-service-rpc       = service-rpc-prelude
-                    service-rpc-params
-                    [ service-rpc-returns ]
-                    semi
-
-service-rpc-prelude =
-                    annotations *CRLF *WSP camel-ident *WSP
-
-service-rpc-params =
-                    "(" *service-rpc-input ")" *WSP
-
-service-rpc-input =
-                    stream /
-                    (snake-ident 1*WSP type
-                     *(*WSP "," *WSP snake-ident 1*WSP type)
-                     [*WSP "," stream])
-
-service-rpc-returns =
-                    "->" (
-                      (*WSP type *WSP) /
-                      ("(" *WSP type *WSP
-                        *("," *WSP type *WSP)
-                        [*WSP stream] *WSP ")") /
-                      (*WSP stream *WSP)
-                    )
-\end{alltt}
+	\small
+	\VerbatimInput{grammar.abnf}
 \end{quote}
 
 \section{Security Considerations}
