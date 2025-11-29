@@ -47,7 +47,7 @@ definition        = struct / enum / service
 
 package           = "package" 1*WSP package-name *WSP semi
 
-package-name      = ident *("." ident)
+package-name      = snake-ident *("." snake-ident)
 
 ; IMPORTS
 
@@ -57,7 +57,7 @@ import-path       = *WSP DQUOTE import-components DQUOTE *WSP
 
 import-components = 1*(ALPHA / DIGIT / "-" / "_" / "/" / ".")
 
-import-alias      = 1*WSP "as" 1*WSP ident
+import-alias      = 1*WSP "as" 1*WSP snake-ident
 
 ; ANNOTATIONS
 

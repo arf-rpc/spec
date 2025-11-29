@@ -365,6 +365,7 @@ v1beta1.mypackage.OtherName
 				unsigned integers of the specified width.
 			\item \texttt{float32}, \texttt{float64}: IEEE~754 binary floating-point values.
 			\item \texttt{string}: a sequence of UTF-8 encoded Unicode scalar values.
+			\item \texttt{timestamp}: Represents a moment in time encoded as an UTC Unix epoch with millisecond precision.
 			\item \texttt{bytes}: an arbitrary sequence of octets.
 			\item \texttt{array<T>}: an ordered, variable-length sequence of values of type \texttt{T}.
 			\item \texttt{map<K, V>}: an unordered, variable-length association between
@@ -375,6 +376,7 @@ v1beta1.mypackage.OtherName
 		User-defined \texttt{struct} types MAY also be declared within a package.
 		All types, whether builtin or user-defined, participate uniformly in the
 		serialization rules described in Section~\ref{sec:serialization}.
+		Additionally, map keys are restricted to primitive types, Structures and Enums. Other types are forbidden.
 
 	\subsection{Struct Declarations}
 	\label{sec:structs}
@@ -450,10 +452,10 @@ v1beta1.mypackage.OtherName
 		form has a well-defined set of legal frame sequences, as specified in
 		Section~\ref{RPC-MethodForms}.
 
-		Unary inputs and outputs, and streams MUST use structures instead of primitive
-		or composite types. This limitation was deliberately created to ensure all data
-		transmitted through RPC methods are part of structures, enforcing all messages to
-		be explicitly defined.
+		Unary inputs and outputs, and streams MUST use either structures or enums instead 
+		of primitive or composite types. This limitation was deliberately created to ensure 
+		all data transmitted through RPC methods are part of structures, enforcing all 
+		messages to be explicitly defined.
 
 	\subsubsection{IDL Syntax for Streams}
 
