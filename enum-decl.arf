@@ -1,0 +1,5 @@
+enum HTTPStatus {
+    OK          = 200;
+    NOT_FOUND   = 0x194;
+    TEAPOT      = 0x1A2;
+}

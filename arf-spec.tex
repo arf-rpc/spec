@@ -432,6 +432,64 @@ v1beta1.mypackage.OtherName
     position of the enumeration value in the declaration.  Enumeration values
     MUST NOT exceed the range of \texttt{uint16}.
 
+  \subsection{Enum Declarations}
+  \label{sec:enums}
+
+    Enums define a finite set of named constants, each associated with an
+    explicit unsigned integer discriminant. Enum values are commonly used
+    as symbolic constants, status codes, and protocol signals.
+
+    An enum declaration has the following form:
+
+    \lstinputlisting[language=arf,firstnumber=1]{enum-decl.arf}
+
+    Each enumeration value MUST specify an explicit, non-negative integer
+    discriminant using the \texttt{=} syntax. The following rules apply:
+
+    \begin{itemize}
+      \item Discriminant values MAY be reused within the same enum.
+      \item Discriminants MUST be elements of the set \( \{ x \in \mathbb{Z} \mid 0 \le x \le 65535 \} \).
+      \item Decimal and hexadecimal literals MAY be used.
+      \item The compiler MUST reject out-of-range discriminants.
+    \end{itemize}
+
+    The textual ordering of enumeration values does \emph{not} affect their
+    numeric representation on the wire; only the explicitly assigned
+    discriminant value is serialized.
+
+    Enum names and value identifiers are subject to the same scoping and
+    naming rules as other top-level declarations within a package.
+
+    \subsubsection{Encoding}
+
+      Enumeration values are serialized as unsigned integers using
+      \texttt{VarUInt} encoding (Section~\ref{sec:length-encoding}). The encoded
+      numeric value is the declared discriminant of the enumeration case.
+
+      Decoders MUST reject any enum value whose discriminant does not match a
+      known case in the enum definition.
+
+    \subsubsection{Use as Map Keys}
+
+      Enums MAY be used as keys in \texttt{map<K,V>} types. When used as a key,
+      an enum behaves identically to its underlying unsigned integer
+      discriminant.
+
+      Equality for enum keys is determined solely by numeric equality of the
+      discriminant value.
+
+    \subsubsection{Evolution Rules}
+
+      Enum declarations MAY be extended by introducing new values with fresh
+      discriminants.
+
+      Existing discriminants MUST NOT be changed. Removing or reassigning a
+      discriminant constitutes a breaking change and MUST be performed only by
+      introducing a new package version.
+
+      Compilers MAY warn if an enum change breaks monotonicity or introduces
+      large gaps, but such gaps are not semantically invalid.
+
   \subsection{Struct Declarations}
   \label{sec:structs}
 

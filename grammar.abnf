@@ -19,6 +19,8 @@ screaming-snake-ident =
 
 camel-ident       = %x41-5A *(ALPHA / DIGIT)
 
+hex-value         = "0x" 1*(DIGIT / HEXDIG)
+
 ; TYPES
 
 type              = composite-type / plain-type
@@ -96,9 +98,11 @@ enum-body         = "{" *enum-elements "}" *WSP *c-nl
 
 enum-elements     = *(c-nl / WSP / enum-value)
 
+enum-disc         = hex-value / "0" / %x31-39 *DIGIT
+
 enum-value        = annotations *CRLF *WSP
                     screaming-snake-ident *WSP
-                    "=" *WSP 1*DIGIT semi
+                    "=" *WSP enum-disc semi
 
 ; SERVICE
 
