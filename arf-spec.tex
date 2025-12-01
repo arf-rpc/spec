@@ -336,6 +336,10 @@
       \item[VarUInt] The variable-length unsigned integer encoding used
         for lengths and similar quantities, as defined in
         Section~\ref{sec:length-encoding}.
+
+      \item[Unix Epoch] The time origin defined as \texttt{1970-01-01T00:00:00Z}
+        in Coordinated Universal Time (UTC), from which arf timestamps measure
+        elapsed milliseconds.
     \end{description}
 
 \section{The arf Language}
@@ -401,7 +405,8 @@ v1beta1.mypackage.OtherName
         unsigned integers of the specified width.
       \item \texttt{float32}, \texttt{float64}: IEEE~754 binary floating-point values.
       \item \texttt{string}: a sequence of UTF-8 encoded Unicode scalar values.
-      \item \texttt{timestamp}: Represents a moment in time encoded as an UTC Unix epoch with millisecond precision.
+      \item \texttt{timestamp}: represents an instant on the UTC time-line encoded as
+        an unsigned integer count of milliseconds since the UTC Unix Epoch.
       \item \texttt{bytes}: an arbitrary sequence of octets.
       \item \texttt{array<T>}: an ordered, variable-length sequence of values of type \texttt{T}.
       \item \texttt{map<K, V>}: an unordered, variable-length association between
@@ -610,6 +615,10 @@ YYYY(i I, stream T) -> (O, stream U);
         Invalid UTF-8 byte sequences MUST cause deserialization to fail.
       \item \textbf{bytes}: encoded as \texttt{VarUInt(length)} followed by
         \texttt{length} raw octets.
+      \item \textbf{timestamp}: encoded as an unsigned 64-bit integer
+        (\texttt{uint64}) representing the number of milliseconds elapsed since
+        the UTC Unix Epoch. Implementations that cannot represent millisecond
+        precision MUST truncate toward zero.
     \end{itemize}
 
     These encodings are used uniformly whether a primitive appears as a
