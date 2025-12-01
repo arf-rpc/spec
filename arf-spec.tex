@@ -654,17 +654,29 @@ YYYY(i I, stream T) -> (O, stream U);
 
     \subsubsection{Structs}
 
-      Structs are serialized field-by-field in the order declared in the IDL.
+      Struct values are serialized as \emph{length-prefixed records}.  Each
+      struct instance is preceded by a byte length that defines the total
+      size of the struct body in bytes, allowing decoders to skip unknown
+      fields safely.
+
+      A struct value is encoded as:
+
+      \begin{enumerate}
+         \item \texttt{VarUInt(L)}, where $L$ is the number of bytes in the
+           struct body that follows; and
+         \item the struct body, consisting of the presence bitmap and
+           serialized field values as described below.
+      \end{enumerate}
+
       No field numbers or tag identifiers appear on the wire; fields are
       identified solely by their ordinal position within the struct.
 
-      Let a struct contain $m$ fields.  Struct serialization proceeds as follows:
+      Let a struct contain $m$ fields.  The struct body is encoded as follows:
 
       \begin{enumerate}
-        \item Emit a presence bitmap with \emph{exactly $m$ bits}, encoded
-          in whole bytes, least-significant bit first.
-          The $i$th bit corresponds to the $i$th field in declaration
-          order.
+        \item Emit a presence bitmap with \emph{exactly $m$ bits}, encoded in
+          whole bytes, least-significant bit first.  The $i$th bit
+          corresponds to the $i$th field in declaration order.
           \begin{itemize}
             \item For a non-optional field, the bit \emph{MUST} be set to~1.
             \item For an \texttt{optional<T>} field, the bit is set to~1 if
@@ -681,10 +693,14 @@ YYYY(i I, stream T) -> (O, stream U);
           \end{itemize}
       \end{enumerate}
 
-      Decoders \emph{MUST} ignore bitmap bits beyond the set of fields
-      they recognize.  When encountering a set bit corresponding to an
-      unknown field, the decoder \emph{MUST} skip the value by applying
-      the serialization rules of the field's declared type.
+      Decoders \emph{MUST} NOT assume knowledge of the physical layout of a
+      struct beyond the fields they explicitly recognize.  After decoding the
+      fields they understand, implementations \emph{MUST} skip any remaining
+      trailing bytes in the struct body as determined by the length prefix.
+
+      Trailing bytes within the struct body are reserved for fields appended
+      in later schema versions and MUST be preserved during forwarding or
+      re-encoding.
 
       Because field ordinals define the on-wire layout, implementations
       \emph{MUST NOT} reorder fields within a package version.
@@ -710,6 +726,76 @@ YYYY(i I, stream T) -> (O, stream U);
 
     Unless explicitly specified, deserialization errors MUST be treated as
     fatal to the enclosing RPC invocation.
+
+  \subsection{Binary Layout Example}
+  \label{sec:layout-example}
+
+    This section provides a concrete example illustrating how arf encodes structs and
+    how length-prefixing enables safe evolution.
+
+    Consider the following initial struct definition:
+
+    \begin{lstlisting}[language=arf]
+struct User {
+    id   uint32;
+    name string;
+}
+    \end{lstlisting}
+
+    This struct contains two fields.  A serialized instance is encoded as:
+
+    \begin{center}
+      \begin{tabular}{ll}
+        \toprule
+        Component & Description \\
+        \midrule
+        VarUInt(L) & Length of the struct body in bytes \\
+        Bitmap    & 2 bits indicating presence of fields \\
+        Field 0   & \texttt{id} (uint32) \\
+        Field 1   & \texttt{name} (string) \\
+        \bottomrule
+      \end{tabular}
+    \end{center}
+
+    Assume an evolution where a new optional field is appended:
+
+    \begin{lstlisting}[language=arf]
+struct User {
+    id    uint32;
+    name  string;
+    email optional<string>;
+}
+    \end{lstlisting}
+
+    The new binary layout becomes:
+
+    \begin{center}
+      \begin{tabular}{ll}
+        \toprule
+        Component & Description \\
+        \midrule
+        VarUInt(L') & New struct body length \\
+        Bitmap     & 3 bits (one for each field) \\
+        Field 0    & \texttt{id} \\
+        Field 1    & \texttt{name} \\
+        Field 2    & \texttt{email} (if present) \\
+        \bottomrule
+      \end{tabular}
+    \end{center}
+
+    When an older receiver (that only knows the two-field layout) decodes this value,
+    it proceeds as follows:
+
+    \begin{itemize}
+      \item It reads \texttt{VarUInt(L')} and learns the total size of the struct body.
+      \item It decodes only the fields it recognizes (the first two).
+      \item It skips the remaining bytes using the length prefix.
+    \end{itemize}
+
+    Because all struct values are length-delimited, receivers never need to
+    understand the internal layout of unknown fields in order to skip them safely.
+    This guarantees forward compatibility for nested structs, arrays of structs, and
+    arbitrarily complex type graphs.
 
 
 \section{RPC Protocol}
@@ -896,7 +982,7 @@ YYYY(i I, stream T) -> (O, stream U);
 
         FNV-1a is not a cryptographic hash function and MUST NOT be used for
         security-sensitive purposes such as message authentication,
-        integrity verification, or identity proof.  Its sole purpose in ARF is
+        integrity verification, or identity proof.  Its sole purpose in arf is
         deterministic identifier derivation.
 
         The domain of the input to the hash function is restricted and
@@ -1246,59 +1332,64 @@ OUT_CLOSE(CID)
 \label{sec:evolution}
 
   arf is designed to permit incremental schema evolution without requiring
-  explicit field identifiers in source files.  The rules in this section
-  govern how types may change across package versions while maintaining
-  compatibility at the binary level.
+  explicit field identifiers in source files.  Compatibility is achieved by
+  combining stable field ordinals with length-prefixed struct encoding, allowing
+  new fields to be added while preserving the ability of older implementations to
+  safely skip unknown data.
+
+  The rules in this section govern how types may change across package versions
+  while maintaining compatibility at the binary level.
 
   \subsection{Adding Fields}
 
-    New fields MAY be appended to the end of an existing struct.  Because
-    field ordinal indices are defined by declaration order, appending a
-    field assigns it the next available ordinal.  Existing fields MUST NOT
-    change ordinal indices.
+    New fields MAY be appended to the end of an existing struct.  Because field
+    ordinal indices are defined by declaration order, appending a field assigns it
+    the next available ordinal.  Existing ordinals MUST NOT change.
 
-    Receivers MUST ignore trailing fields they do not recognize.  Senders
-    MAY omit trailing fields during serialization.  These rules allow new
-    fields to be introduced in a backward-compatible and forward-compatible
-    manner.
+    Struct values are length-prefixed as defined in
+    Section~\ref{sec:serialization}.  As a result, receivers MUST skip any trailing
+    bytes in the struct body beyond the fields they recognize.  This allows new
+    fields to be introduced in a backward-compatible and forward-compatible manner.
 
-    New fields SHOULD be declared as \texttt{optional<T>} unless the type
-    definition clearly requires the field to be present for semantic
-    correctness.  Optional fields preserve maximal flexibility for
-    evolution.
+    Senders MAY include newly added fields when communicating with older receivers;
+    older receivers MUST ignore trailing bytes safely.  Likewise, senders MAY omit
+    fields not known to the peer.
+
+    New fields SHOULD be declared as \texttt{optional<T>} unless the semantics
+    require mandatory presence.  Using \texttt{optional<T>} maximizes flexibility
+    and minimizes compatibility risk.
 
   \subsection{Removing Fields}
 
-    Fields MUST NOT be removed from a struct in a way that changes existing
-    ordinal indices.  Instead, a field that is no longer used SHOULD be
-    marked with the \texttt{@deprecated} attribute and retained with its
-    original ordinal.
+    Fields MUST NOT be removed from a struct in a way that changes the ordinal
+    position of any remaining field.  Instead, fields that are no longer used SHOULD
+    be marked with the \texttt{@deprecated} attribute and retained with their
+    original ordinal position.
 
-    Senders SHOULD omit deprecated fields.  Receivers MUST ignore deprecated
-    fields if they appear.
+    Senders SHOULD omit deprecated fields when serializing.  Receivers MUST accept
+    and ignore deprecated fields if they appear.
 
-    If a field must be fully removed, its removal MUST occur only in a new,
-    distinct package version (see Section~\ref{sec:versioning}).  Cross-version
-    compatibility between packages is not required.
+    If a field must be fully removed (such that its ordinal becomes invalid), this
+    MUST be done only by introducing a new package version (see
+    Section~\ref{sec:versioning}).  No cross-package compatibility is required.
 
   \subsection{Changing Types}
 
-    A field's type MUST NOT change within the same package version.  Any
-    change in type—including widening (e.g., \texttt{int32} to
-    \texttt{int64}), narrowing, or structural changes—MUST be treated as a
-    backward-incompatible modification.
+    A field's type MUST NOT change within the same package version.  Any modification
+    to a field's type—including widening (e.g., \texttt{int32} to \texttt{int64}),
+    narrowing, or structural change—constitutes a backward-incompatible change.
 
-    Type changes MUST be performed only within a new package version
-    boundary.
+    Type changes MUST be performed only by introducing a new package version.
 
-    Changing a field from a concrete type to \texttt{optional<T>} MAY be
-    performed only if the wire encoding remains identical when the value is
-    present and if receivers can safely interpret the absence of the field
-    as the ``not present'' state.
+    Changing a field from a concrete type to \texttt{optional<T>} within the same
+    package version is permitted only if:
+    \begin{itemize}
+      \item the wire encoding is identical when the value is present, and
+      \item receivers can safely interpret the absence of the value as ``not present''.
+    \end{itemize}
 
-    Changing a field from \texttt{optional<T>} to a non-optional type is
-    not compatible and MUST NOT be performed within the same package
-    version.
+    Changing a field from \texttt{optional<T>} to a non-optional type is not
+    compatible and MUST NOT be performed within the same package version.
 
   \subsection{Versioning Through Packages}
   \label{sec:versioning}
@@ -1388,7 +1479,6 @@ OUT_CLOSE(CID)
 
 \section{Appendices}
 \appendix
-%\addcontentsline{toc}{section}{Appendices}
 
   \section{FNV-1a-32 Reference Implementation}
   \label{annex:a}
