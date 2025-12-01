@@ -31,9 +31,11 @@ optional-type     = "optional<" *WSP type *WSP ">"
 
 array-type        = "array<" *WSP type *WSP ">"
 
-map-type          = "map<" *WSP type *WSP "," *WSP type *WSP ">"
+map-type          = "map<" *WSP map-key-type *WSP "," *WSP type *WSP ">"
 
-stream            = "stream" 1*WSP type
+map-key-type      = plain-type
+
+stream            = "stream" 1*WSP camel-ident
 
 ; SOURCE ROOT
 
@@ -121,15 +123,15 @@ service-rpc-params =
 
 service-rpc-input =
                     stream /
-                    (snake-ident 1*WSP type
-                     *(*WSP "," *WSP snake-ident 1*WSP type)
+                    (snake-ident 1*WSP camel-ident
+                     *(*WSP "," *WSP snake-ident 1*WSP camel-ident)
                      [*WSP "," stream])
 
 service-rpc-returns =
                     "->" (
-                      (*WSP type *WSP) /
-                      ("(" *WSP type *WSP
-                        *("," *WSP type *WSP)
+                      (*WSP camel-ident *WSP) /
+                      ("(" *WSP camel-ident *WSP
+                        *("," *WSP camel-ident *WSP)
                         [*WSP stream] *WSP ")") /
                       (*WSP stream *WSP)
                     )

@@ -325,7 +325,7 @@
 
       \item[Package] A named collection of type and service declarations
         that forms a versioned namespace boundary, as defined in
-        Section~\ref{sec:structs}.
+        Section~\ref{sec:packages}.
 
       \item[Service] A named collection of RPC methods defined within a
         package.
@@ -345,6 +345,7 @@
 \section{The arf Language}
 
   \subsection{Packages}
+  \label{sec:packages}
 
     An arf source file MUST begin with a \texttt{package} declaration:
 
@@ -393,9 +394,10 @@ v1beta1.mypackage.OtherName
   \subsection{Types}
 
     arf provides a set of builtin types that form the foundation of the
-    serialization model.  These types MAY appear as struct fields, unary
-    method parameters and results, and stream element types.  The builtin
-    types are:
+    serialization model.  These types MAY appear as struct fields and as
+    components of composite types. Builtin primitive types MUST NOT appear
+    directly as unary method parameters, unary method results, or stream element
+    types.
 
     \begin{itemize}
       \item \texttt{bool}: a boolean value.
@@ -417,7 +419,18 @@ v1beta1.mypackage.OtherName
     User-defined \texttt{struct} types MAY also be declared within a package.
     All types, whether builtin or user-defined, participate uniformly in the
     serialization rules described in Section~\ref{sec:serialization}.
-    Additionally, map keys are restricted to primitive types, Structures and Enums. Other types are forbidden.
+    Permitted map key types are:
+
+    \begin{itemize}
+      \item any unsigned or signed integer type, and
+      \item any \texttt{enum} type.
+    \end{itemize}
+
+    All other types are forbidden as map keys.
+
+    Enums are encoded as \texttt{uint16} representing the zero-based ordinal
+    position of the enumeration value in the declaration.  Enumeration values
+    MUST NOT exceed the range of \texttt{uint16}.
 
   \subsection{Struct Declarations}
   \label{sec:structs}
@@ -444,13 +457,19 @@ v1beta1.mypackage.OtherName
 
     \lstinputlisting[language=arf,firstnumber=1]{service-decl.arf}
 
-    Each method name MUST be unique within a service unless the service is
-    re-opened as described below.
+    Method overloading (multiple methods with the same name but different
+    signatures) is not permitted. Method names MUST be unique within a service.
+
+    Each method name MUST be unique within the merged logical service definition
+    formed after processing all re-opened service blocks. Multiple declarations
+    of the same method name are permitted only when their signatures are identical.
 
   \subsubsection{Re-Openable Services}
 
     A service MAY be declared in multiple \texttt{service} blocks within the
-    same package:
+    same package. Re-opening a service does not introduce independent scopes.
+    All method declarations across blocks participate in a single unified
+    namespace:
 
     \lstinputlisting[language=arf,firstnumber=1]{service-decl-reopen.arf}
 
@@ -473,6 +492,12 @@ v1beta1.mypackage.OtherName
     If any of these conditions is violated, the signatures are divergent,
     and the compiler MUST reject the program.
 
+    When a service is declared across multiple \texttt{service} blocks,
+    all method names contribute to the same fully-qualified method namespace.
+    Duplicate method names across service blocks do not constitute overloading;
+    they represent re-declaration and MUST be byte-for-byte equivalent in
+    signature.
+
   \subsubsection{Methods}
     \label{sec:methods}
 
@@ -493,10 +518,12 @@ v1beta1.mypackage.OtherName
     form has a well-defined set of legal frame sequences, as specified in
     Section~\ref{RPC-MethodForms}.
 
-    Unary inputs and outputs, and streams MUST use either structures or enums instead
-    of primitive or composite types. This limitation was deliberately created to ensure
-    all data transmitted through RPC methods are part of structures, enforcing all
-    messages to be explicitly defined.
+    All unary parameters, unary results, and stream element types MUST be
+    defined as either \texttt{struct} or \texttt{enum} types.  Primitive and
+    composite types MUST NOT appear directly in RPC method signatures. This
+    limitation was deliberately created to ensure all data transmitted through
+    RPC methods are part of structures, enforcing all messages to be explicitly
+    defined.
 
   \subsubsection{IDL Syntax for Streams}
 
@@ -549,6 +576,14 @@ YYYY(i I, stream T) -> (O, stream U);
       constitutes a breaking change and therefore requires introducing a new
       package version.
 
+      Methods are assigned fully-qualified names of the form:
+
+      \begin{lstlisting}[language=meta-arf]
+<package-name> "." <service-name> "." <method-name>
+      \end{lstlisting}
+
+      This string is the canonical method identity used for identifier derivation.
+
 \section{Serialization}
 \label{sec:serialization}
 
@@ -560,11 +595,13 @@ YYYY(i I, stream T) -> (O, stream U);
     fields are serialized in declaration order using implicit ordinal
     indices as described in Section~\ref{sec:structs}.
 
-    Unless otherwise noted, all integers are encoded in little-endian byte
-    order.  Variable-length entities (such as strings, byte sequences,
-    arrays, and maps) are prefixed with a length encoded using the
-    variable-length integer scheme described in
-    Section~\ref{sec:length-encoding}.
+    All application-level integer \emph{values} (such as field values and
+    lengths) are encoded using the \texttt{VarUInt} scheme (and ZigZag +
+    \texttt{VarUInt} for signed integers), unless explicitly stated otherwise.
+    Floating-point values are encoded in IEEE~754 binary formats using
+    little-endian byte order.  Variable-length entities (such as strings,
+    byte sequences, arrays, and maps) are prefixed with a length encoded using
+    the variable-length integer scheme described in Section~\ref{sec:length-encoding}.
 
     All serialized representations are self-delimiting and do not require
     out-of-band framing.  The RPC protocol defines its own framing mechanism
@@ -593,6 +630,129 @@ YYYY(i I, stream T) -> (O, stream U);
     Unless explicitly stated, all length-prefixed types in this section use
     \texttt{VarUInt} for length encoding.
 
+  \subsection{Signed Integer Encoding}
+  \label{sec:signed-int-encoding}
+
+    Signed integer values (\texttt{int8}, \texttt{int16}, \texttt{int32},
+    \texttt{int64}) are encoded using a two-step process:
+
+    \begin{enumerate}
+      \item The signed value is transformed into an unsigned integer using
+        ZigZag encoding.
+      \item The resulting unsigned integer is serialized using the
+        \texttt{VarUInt} scheme defined in Section~\ref{sec:length-encoding}.
+    \end{enumerate}
+
+    \subsubsection{ZigZag Transformation}
+
+      ZigZag encoding maps signed integers to unsigned integers such that small
+      magnitude values (both positive and negative) produce small unsigned
+      values when serialized.  This ensures that numerically small signed values
+      compress efficiently under \texttt{VarUInt} encoding.
+
+      For a signed integer value $n$ of bit-width $w$, the ZigZag transform is
+      defined as:
+
+\[
+z = (n \ll 1) \oplus (n \gg (w - 1))
+\]
+
+      Where:
+        \begin{itemize}
+          \item $\ll$ denotes arithmetic left-shift,
+          \item $\gg$ denotes arithmetic right-shift,
+          \item $\oplus$ denotes bitwise exclusive OR, and
+          \item $w$ is the width of the signed integer type in bits.
+        \end{itemize}
+
+      The inverse transformation is defined as:
+
+\[
+n = (z \gg 1) \oplus -(z \wedge 1)
+\]
+
+    \subsubsection{Width Enforcement}
+
+      Although ZigZag and \texttt{VarUInt} operate on unbounded integers in
+      theory, arf enforces strict width limits based on the declared type.
+
+      Decoders \emph{MUST} reject any decoded value whose magnitude exceeds the
+      range of the declared signed type:
+
+      \begin{itemize}
+        \item \texttt{int8}:      $-128 \le n \le 127$
+        \item \texttt{int16}:     $-32{,}768 \le n \le 32{,}767$
+        \item \texttt{int32}:     $-2^{31} \le n \le 2^{31}-1$
+        \item \texttt{int64}:     $-2^{63} \le n \le 2^{63}-1$
+      \end{itemize}
+
+      Encoders \emph{MUST NOT} emit values outside the representable range of
+      the declared type.
+
+    \subsubsection{Rationale}
+
+      ZigZag encoding ensures that:
+
+      \begin{itemize}
+        \item small negative integers do not expand to large encodings,
+        \item signed and unsigned integers share a common storage format,
+        \item the encoding is independent of machine endianness, and
+        \item integer encodings remain stable across platforms and languages.
+      \end{itemize}
+
+      This scheme enables compact representation of signed integers while
+      preserving fast decoding and deterministic serialization.
+
+
+    \subsubsection{Worked Examples}
+
+      The following examples illustrate ZigZag transformation and the resulting
+      VarUInt encoding (32-bit width shown for clarity):
+
+      \begin{center}
+        \begin{tabular}{rrrr}
+          \toprule
+          Signed & ZigZag($n$) & Decimal & VarUInt Bytes \\ \midrule
+          0      & 0x00        & 0       & \texttt{00}   \\
+          -1     & 0x01        & 1       & \texttt{01}   \\
+          1      & 0x02        & 2       & \texttt{02}   \\
+          -2     & 0x03        & 3       & \texttt{03}   \\
+          2      & 0x04        & 4       & \texttt{04}   \\
+          300    & 0x0258      & 600     & \texttt{D8 04}\\
+          -300   & 0x0257      & 599     & \texttt{D7 04}\\
+          \bottomrule
+        \end{tabular}
+      \end{center}
+
+      For example, for $n = -1$:
+
+\[
+z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
+\]
+
+      ZigZag(-1) therefore produces \texttt{0x01}, which is encoded as a
+      single-byte VarUInt.
+
+
+    \subsubsection{Mapping Summary (Signed → ZigZag → VarUInt)}
+
+      \begin{center}
+        \begin{tabular}{rrr}
+          \toprule
+          Signed & ZigZag($n$) & VarUInt Encoding \\ \midrule
+          0      & 0           & \texttt{00} \\
+          -1     & 1           & \texttt{01} \\
+          1      & 2           & \texttt{02} \\
+          -2     & 3           & \texttt{03} \\
+          2      & 4           & \texttt{04} \\
+          -3     & 5           & \texttt{05} \\
+          3      & 6           & \texttt{06} \\
+          300    & 600         & \texttt{D8 04} \\
+          -300   & 599         & \texttt{D7 04} \\
+          \bottomrule
+        \end{tabular}
+      \end{center}
+
   \subsection{Primitive Types}
 
     The serialization of primitive types is defined as follows:
@@ -601,13 +761,17 @@ YYYY(i I, stream T) -> (O, stream U);
       \item \textbf{bool}: encoded as a single byte.  The value \texttt{0x00}
         represents \texttt{false}; the value \texttt{0x01} represents
         \texttt{true}.  No other values are permitted.
-      \item \textbf{int8}, \textbf{uint8}: encoded as a single byte.
-      \item \textbf{int16}, \textbf{uint16}: encoded as 2~bytes in
-        little-endian order.
-      \item \textbf{int32}, \textbf{uint32}: encoded as 4~bytes in
-        little-endian order.
-      \item \textbf{int64}, \textbf{uint64}: encoded as 8~bytes in
-        little-endian order.
+      \item \textbf{uint8}, \textbf{uint16}, \textbf{uint32}, \textbf{uint64}:
+        encoded as \texttt{VarUInt} (Section~\ref{sec:length-encoding}).  The
+        encoded value MUST lie within the range of the corresponding unsigned
+        integer type.  Decoders MUST reject values that exceed the representable
+        range of the declared type.
+      \item \textbf{int8}, \textbf{int16}, \textbf{int32}, \textbf{int64}:
+        encoded as a signed variable-length integer using ZigZag encoding
+        followed by \texttt{VarUInt}.  Let $n$ be the signed value and $z$ the
+        ZigZag-transformed unsigned integer.  Encoders MUST compute $z$ and emit
+        it using \texttt{VarUInt}; decoders MUST recover $n$ from $z$ and verify
+        that it lies within the range of the declared signed type.
       \item \textbf{float32}, \textbf{float64}: encoded in IEEE~754 binary32
         or binary64 format respectively, using little-endian byte order.
       \item \textbf{string}: encoded as \texttt{VarUInt(length)} followed by
@@ -615,16 +779,25 @@ YYYY(i I, stream T) -> (O, stream U);
         Invalid UTF-8 byte sequences MUST cause deserialization to fail.
       \item \textbf{bytes}: encoded as \texttt{VarUInt(length)} followed by
         \texttt{length} raw octets.
-      \item \textbf{timestamp}: encoded as an unsigned 64-bit integer
-        (\texttt{uint64}) representing the number of milliseconds elapsed since
-        the UTC Unix Epoch. Implementations that cannot represent millisecond
-        precision MUST truncate toward zero.
+      \item \textbf{timestamp}: encoded as \texttt{VarUInt} representing the
+        number of milliseconds elapsed since the UTC Unix Epoch.
+        Implementations that cannot represent millisecond precision MUST
+        truncate toward zero.
     \end{itemize}
 
     These encodings are used uniformly whether a primitive appears as a
-    struct field. However, primitives cannot be used as unary method parameters,
-    unary method results, or a stream elements. For methods, structs must be used,
-    as specified in Section~\ref{sec:methods}.
+    struct field or within a composite type. However, primitives MUST NOT be
+    used as unary method parameters, unary method results, or as stream elements.
+    For methods, unary inputs, unary outputs, and streams MUST use structs or
+    enums as specified in Section~\ref{sec:methods}.
+
+    Key equality is defined by equality of the serialized key value.
+
+    For integer keys, numeric equality applies.
+    For enumeration keys, ordinal equality applies.
+
+    Because structured types are forbidden as keys, equality testing is
+    deterministic and implementation-independent.
 
   \subsection{Composite Types}
 
@@ -1002,11 +1175,11 @@ struct User {
 
         \begin{itemize}
             \item \textbf{PackageID} is derived from:
-                  \texttt{"pkg:" || <package-fqn>}
+              \texttt{"pkg:" || <package-fqn>}
             \item \textbf{ServiceID} is derived from:
-                  \texttt{"svc:" || <service-fqn>}
+              \texttt{"svc:" || <service-fqn>}
             \item \textbf{MethodID} is derived from:
-                  \texttt{"method:" || <method-fqn>}
+              \texttt{"method:" || <package> "." <service> "." <method>}
         \end{itemize}
 
         The fully-qualified name strings MUST be encoded as UTF-8 prior to
@@ -1551,5 +1724,289 @@ uint32_t arf_fnv1a32_cstr(const char *s) {
       these test vectors before using it to derive \texttt{PackageID},
       \texttt{ServiceID}, or \texttt{MethodID} values.
 
+  \section{C Reference Implementation for ZigZag Encoding}
+  \label{annex:zigzag}
 
+    The following C code implements ZigZag transformation for 32-bit and 64-bit
+    signed integers.
+
+    \begin{lstlisting}[language=arfC]
+/* Encode signed 32-bit integer into ZigZag form. */
+static inline uint32_t arf_zigzag32_encode(int32_t n) {
+    return (uint32_t)(((uint32_t)n << 1) ^ (uint32_t)(n >> 31));
+}
+
+/* Decode ZigZag-encoded 32-bit integer. */
+static inline int32_t arf_zigzag32_decode(uint32_t z) {
+    return (int32_t)((z >> 1) ^ (uint32_t)-(int32_t)(z & 1u));
+}
+
+/* Encode signed 64-bit integer into ZigZag form. */
+static inline uint64_t arf_zigzag64_encode(int64_t n) {
+    return (uint64_t)(((uint64_t)n << 1) ^ (uint64_t)(n >> 63));
+}
+
+/* Decode ZigZag-encoded 64-bit integer. */
+static inline int64_t arf_zigzag64_decode(uint64_t z) {
+    return (int64_t)((z >> 1) ^ (uint64_t)-(int64_t)(z & 1u));
+}
+    \end{lstlisting}
+
+  \section{Test Vectors for Signed Integer Encoding}
+  \label{annex:testvectors}
+
+    The following test vectors are normative.  Implementations \emph{MUST}
+    produce exactly the given ZigZag and VarUInt results.
+
+    \subsection{Common Values}
+
+      \begin{center}
+        \begin{tabular}{rrrr}
+          \toprule
+          Value & ZigZag($n$) & Decimal & VarUInt Encoding \\ \midrule
+          0     & 0x00        & 0       & \texttt{00} \\
+          -1    & 0x01        & 1       & \texttt{01} \\
+          1     & 0x02        & 2       & \texttt{02} \\
+          -2    & 0x03        & 3       & \texttt{03} \\
+          2     & 0x04        & 4       & \texttt{04} \\
+          63    & 0x7E        & 126     & \texttt{7E} \\
+          -64   & 0x7F        & 127     & \texttt{7F} \\
+          64    & 0x80        & 128     & \texttt{80 01} \\
+          -65   & 0x81        & 129     & \texttt{81 01} \\
+          300   & 0x0258      & 600     & \texttt{D8 04} \\
+          -300  & 0x0257      & 599     & \texttt{D7 04} \\
+          \bottomrule
+        \end{tabular}
+      \end{center}
+
+    \subsection{Boundary Values}
+
+      \subsubsection{int8}
+
+        \begin{center}
+          \begin{tabular}{rrr}
+            \toprule
+            Value & ZigZag($n$) & VarUInt Bytes \\ \midrule
+            -128  & 0xFF        & \texttt{FF 01} \\
+            127   & 0xFE        & \texttt{FE 01} \\
+            \bottomrule
+          \end{tabular}
+        \end{center}
+
+      \subsubsection{int16}
+
+        \begin{center}
+          \begin{tabular}{rrr}
+            \toprule
+            Value & ZigZag($n$) & VarUInt Bytes \\ \midrule
+            -32768 & 0xFFFF     & \texttt{FF FF 03} \\
+            32767  & 0xFFFE     & \texttt{FE FF 03} \\
+            \bottomrule
+          \end{tabular}
+        \end{center}
+
+      \subsubsection{int32}
+
+        \begin{center}
+          \begin{tabular}{rrr}
+            \toprule
+            Value & ZigZag($n$) & VarUInt Bytes \\ \midrule
+            -2147483648 & 0xFFFFFFFF & \texttt{FF FF FF FF 0F} \\
+            2147483647  & 0xFFFFFFFE & \texttt{FE FF FF FF 0F} \\
+            \bottomrule
+          \end{tabular}
+        \end{center}
+
+      \subsubsection{int64}
+
+        \begin{center}
+          \begin{tabular}{rrr}
+            \toprule
+            Value & ZigZag($n$) & VarUInt Bytes \\ \midrule
+            INT64\_MIN & 0xFFFFFFFFFFFFFFFF & \texttt{FF FF FF FF FF FF FF FF FF 01} \\
+            INT64\_MAX & 0xFFFFFFFFFFFFFFFE & \texttt{FE FF FF FF FF FF FF FF FF 01} \\
+            \bottomrule
+          \end{tabular}
+        \end{center}
+
+  \section{Implementation Notes (Informative)}
+  \label{annex:impl-notes}
+
+    This appendix provides non-normative guidance for implementers of arf
+    encoders, decoders, and RPC runtimes.  The recommendations in this section
+    are intended to improve robustness, interoperability, and operational
+    safety, but they do not introduce additional protocol requirements beyond
+    the normative text in the main body of this specification.
+
+    \subsection{Recommended Limits}
+
+      Although the core specification does not mandate concrete numeric limits,
+      practical implementations SHOULD enforce the following upper bounds:
+
+      \begin{itemize}
+        \item \textbf{Maximum frame size}: Implementations SHOULD bound the
+          size of a single arf frame (including header and payload).  A value
+          on the order of 1--16~MiB is typical for RPC-style workloads, but
+          deployments MAY choose tighter or looser limits based on use case.
+        \item \textbf{Maximum struct body size}: Independently from the frame
+          limit, implementations SHOULD bound the decoded struct body length
+          (the \texttt{VarUInt(L)} prefix for a struct).  This prevents a
+          malicious peer from embedding an excessively large struct within an
+          otherwise reasonable frame.
+        \item \textbf{Maximum nesting depth}: Decoders SHOULD enforce a maximum
+          nesting depth for composite types (e.g., structs containing arrays of
+          structs containing maps, and so on).  A depth limit on the order of
+          32--64 is generally sufficient to prevent stack exhaustion in
+          recursive decoders.
+        \item \textbf{Maximum collection lengths}: Implementations SHOULD
+          impose limits on:
+          \begin{itemize}
+            \item maximum array length,
+            \item maximum map entry count,
+            \item maximum string length (in bytes),
+            \item maximum \texttt{bytes} length.
+          \end{itemize}
+          These limits SHOULD be enforced before allocating memory for the
+          collection payload.
+        \item \textbf{Maximum concurrent RPCs}: Servers SHOULD bound the number
+          of simultaneously active \texttt{CorrelationID} values per
+          connection, and MAY apply per-principal or per-IP concurrency limits
+          at a higher layer.
+      \end{itemize}
+
+      Implementations SHOULD treat the violation of such local limits as a
+      fatal error for the affected RPC, and MAY close the underlying
+      connection if abuse is suspected.
+
+    \subsection{VarUInt and Signed Integer Decoding}
+
+      Implementations SHOULD adopt the following practices when decoding
+      \texttt{VarUInt} and ZigZag-encoded integers:
+
+      \begin{itemize}
+        \item \textbf{Byte limit}: For 64-bit values, at most ten bytes are
+          needed to represent any valid \texttt{VarUInt}.  Decoders SHOULD
+          reject encodings that use more than ten bytes, even if the resulting
+          numeric value would still fit in a 64-bit unsigned integer.
+        \item \textbf{Early overflow detection}: When reconstructing the
+          integer value, decoders SHOULD detect overflow incrementally (for
+          example, before shifting or adding each new 7-bit chunk) rather than
+          relying on native wraparound.
+        \item \textbf{Width checking}: After applying ZigZag decoding,
+          implementations MUST verify that the result falls within the range
+          of the declared signed type (as specified in
+          Section~\ref{sec:signed-int-encoding}).  Implementers are encouraged
+          to centralize these checks in shared helpers to avoid inconsistencies
+          across call sites.
+      \end{itemize}
+
+      For encoder implementations, it is RECOMMENDED to reuse the same
+      \texttt{VarUInt} and ZigZag routines across all integer types to ensure
+      uniform behavior and simplify testing.
+
+    \subsection{Framing and Buffering Strategies}
+
+      Because arf frames are carried over a reliable byte stream, endpoints
+      MUST reconstruct frames from arbitrary segment boundaries.  In practice,
+      many implementations adopt one of the following patterns:
+
+      \begin{itemize}
+        \item Maintain a per-connection read buffer, append bytes as they are
+          received, and attempt to parse complete frames in a loop until no
+          further complete frame is available.
+        \item Use a small state machine that first parses the fixed header,
+          then decodes \texttt{PayloadLength} using \texttt{VarUInt}, and
+          finally waits until the indicated number of payload bytes are
+          available before dispatching the frame.
+      \end{itemize}
+
+      Implementations SHOULD validate the \texttt{Magic} and \texttt{Version}
+      fields before allocating large buffers for the payload.  If either field
+      is invalid, the connection SHOULD be closed immediately.
+
+    \subsection{Stream and RPC Lifecycle Management}
+
+      Implementers are encouraged to model each active RPC as an explicit
+      state machine keyed by \texttt{CorrelationID}.  Such a state machine
+      typically tracks:
+
+      \begin{itemize}
+        \item whether \texttt{INVOKE} has been seen,
+        \item whether \texttt{RESPONSE} has been sent or received,
+        \item whether the input stream (if any) is open or closed,
+        \item whether the output stream (if any) is open or closed,
+        \item whether an \texttt{ERROR} or \texttt{CANCEL} has terminated the RPC.
+      \end{itemize}
+
+      Once the RPC completion conditions in Section~\ref{sec:rpc-completion}
+      are satisfied, the corresponding state MUST be discarded and the
+      \texttt{CorrelationID} returned to the pool of available identifiers.
+
+      To avoid resource leaks, implementations SHOULD apply inactivity
+      timeouts to RPCs that do not progress (for example, an input stream that
+      never sends \texttt{IN\_CLOSE}, or a server that never produces
+      \texttt{RESPONSE}).  Exceeding such a timeout MAY result in an
+      \texttt{ERROR} frame and/or connection closure.
+
+    \subsection{Timestamps and Clock Handling}
+
+      arf \texttt{timestamp} values represent milliseconds since the UTC Unix
+      Epoch.  The following practices are RECOMMENDED:
+
+      \begin{itemize}
+        \item Timestamps SHOULD be generated based on a monotonic, reasonably
+          accurate system clock synchronized via a time protocol such as NTP
+          or equivalent.
+        \item When converting between local time and UTC, implementations
+          SHOULD use a time-zone aware library rather than hard-coding
+          offsets, in order to correctly handle daylight saving changes and
+          historical time-zone adjustments.
+        \item When a platform cannot represent millisecond precision, it
+          SHOULD truncate fractional milliseconds toward zero when encoding,
+          as described in the core specification.
+      \end{itemize}
+
+      When comparing timestamps originating from different systems,
+      applications SHOULD be tolerant to moderate clock skew and SHOULD avoid
+      treating small discrepancies as protocol errors.
+
+    \subsection{Identifier Caching}
+
+      Because FNV-1a identifier derivation is deterministic and depends only
+      on fully-qualified names and fixed prefixes, implementations MAY cache
+      the resulting \texttt{PackageID}, \texttt{ServiceID}, and
+      \texttt{MethodID} values to avoid recomputing them at runtime.
+
+      Typical approaches include:
+
+      \begin{itemize}
+        \item precomputing identifiers at code-generation time and emitting
+          them as constants in generated stubs, or
+        \item computing identifiers once at process start and storing them in
+          an immutable lookup table keyed by fully-qualified name.
+      \end{itemize}
+
+      Regardless of caching strategy, compilers and build tooling MUST still
+      detect collisions during schema compilation, as specified in
+      Section~\ref{sec:identifiers}.
+
+    \subsection{Error Mapping and Diagnostics}
+
+      arf does not define a structured error payload format.  Implementations
+      typically wrap \texttt{ERROR} frames with an application-specific
+      structure that includes:
+
+      \begin{itemize}
+        \item a machine-readable error code,
+        \item a human-readable message,
+        \item optional metadata such as retry hints or correlation tokens.
+      \end{itemize}
+
+      It is RECOMMENDED that runtimes map transport- or decoding-level failures
+      (such as malformed frames, invalid VarUInt encodings, or type width
+      violations) to \texttt{ERROR} frames only when the connection remains
+      otherwise usable.  If the integrity of the framing layer is in doubt
+      (for example, due to a bad magic number or a severely malformed header),
+      the implementation SHOULD close the connection instead of attempting to
+      recover.
 \end{document}
