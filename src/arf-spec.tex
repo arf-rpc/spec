@@ -17,6 +17,8 @@
 \usepackage{fancyvrb}
 \usetikzlibrary{matrix,fit}
 \usepackage[hidelinks=true]{hyperref}
+\usepackage{float}
+\usepackage{enumitem}
 
 \usepackage[
   backend=biber,
@@ -1517,7 +1519,7 @@ FNV-1a-32(input):
       \texttt{CorrelationID} values MAY be arbitrarily interleaved on the same
       connection, as described in Section~\ref{sec:multiplexing}.
 
-      \begin{table}[htb]
+      \begin{table}[H]
         \centering
         \caption{arf Method Forms and Permitted Streaming Frames \\ (Successful Completion Only; Cancellation Overrides)}
         \label{tab:method-forms}
@@ -1551,28 +1553,39 @@ FNV-1a-32(input):
           YYYY & Y & Y & Y & Y & Y & Y & Y & Y \\
           \bottomrule
         \end{tabular}
+
+        \vskip 0.5em
+
+        \raggedright
+        \footnotesize
+        \noindent
+        \textbf{Note:} The permissions in this table apply only to RPCs that
+          complete successfully. If an RPC is terminated by \texttt{CANCEL} or
+          \texttt{ERROR}, \texttt{IN\_CLOSE} and \texttt{OUT\_CLOSE} are neither
+          required nor permitted. Cancellation semantics are defined in
+          Section~\ref{sec:cancellation}.
+
+        \vskip 0.5em
+        \textbf{Legend}
+
+        \begin{description}[
+          style=sameline,
+          leftmargin=45pt,
+          labelsep=1.2em,
+          labelwidth=4em,
+          align=left,
+          font=\normalfont\ttfamily
+        ]
+          \item[HasIn]  HasInput
+          \item[HasOut] HasOutput
+          \item[HasInS] HasInputStream
+          \item[HasOutS] HasOutputStream
+          \item[C:IS]   client MAY send \texttt{IN\_STREAM}
+          \item[C:IC]   client MAY send \texttt{IN\_CLOSE}
+          \item[S:OS]   server MAY send \texttt{OUT\_STREAM}
+          \item[S:OC]   server MAY send \texttt{OUT\_CLOSE}
+        \end{description}
       \end{table}
-
-      \noindent
-      \textbf{Note:} The permissions in this table apply only to RPCs that
-      complete successfully. If an RPC is terminated by \texttt{CANCEL} or
-      \texttt{ERROR}, \texttt{IN\_CLOSE} and \texttt{OUT\_CLOSE} are neither
-      required nor permitted. Cancellation semantics are defined in
-      Section~\ref{sec:cancellation}.
-
-      \noindent
-      Legend:
-
-      \begin{itemize}
-        \item HasIn  = HasInput
-        \item HasOut = HasOutput
-        \item HasInS = HasInputStream
-        \item HasOutS = HasOutputStream
-        \item C:IS = client MAY send \texttt{IN\_STREAM}
-        \item C:IC = client MAY send \texttt{IN\_CLOSE}
-        \item S:OS = server MAY send \texttt{OUT\_STREAM}
-        \item S:OC = server MAY send \texttt{OUT\_CLOSE}
-      \end{itemize}
 
       The following rules apply only to RPCs that complete successfully. In the
       presence of cancellation or error, the stream-termination requirements in
