@@ -68,10 +68,10 @@ import-alias      = 1*WSP "as" 1*WSP snake-ident
 annotations       = *(annotation)
 
 annotation        = "@" snake-ident *WSP
-                    [ "(" *annotation-params ")" ]
+                    [ "(" *WSP [annotation-params] *WSP ")" ]
                     *WSP *c-nl
 
-annotation-params = annotation-param *("," annotation-param)
+annotation-params = annotation-param *(*WSP "," *WSP annotation-param)
 
 annotation-param  = DQUOTE *VCHAR DQUOTE
 

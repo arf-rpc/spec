@@ -16,6 +16,7 @@
 \usepackage{tikz}
 \usepackage{fancyvrb}
 \usetikzlibrary{matrix,fit}
+\usepackage[hidelinks=true]{hyperref}
 
 \usepackage[
   backend=biber,
@@ -24,8 +25,6 @@
   date=iso,
   defernumbers=true
 ]{biblatex}
-
-\usepackage{hyperref}
 
 \DeclareFieldFormat{labelnumber}{%
   \iffieldundef{shorthand}
@@ -319,9 +318,9 @@
         serialization by its ordinal position within the struct
         declaration.
 
-      \item[Optional field] A struct field whose type is
-        \texttt{optional<T>}, whose presence or absence is indicated by
-        the struct’s presence bitmap.
+      \item[Optional field] A struct field whose type is \texttt{optional<T>},
+        whose presence or absence is indicated by an explicit presence marker
+        in the serialized representation (see Section~\ref{sec:optional-fields}).
 
       \item[Package] A named collection of type and service declarations
         that forms a versioned namespace boundary, as defined in
@@ -428,9 +427,10 @@ v1beta1.mypackage.OtherName
 
     All other types are forbidden as map keys.
 
-    Enums are encoded as \texttt{uint16} representing the zero-based ordinal
-    position of the enumeration value in the declaration.  Enumeration values
-    MUST NOT exceed the range of \texttt{uint16}.
+    Enums are encoded as unsigned integer discriminants in the range
+    \(\{ x \in \mathbb{Z} \mid 0 \le x \le 65535 \}\), serialized using the
+    \texttt{VarUInt} scheme. The enum declaration and encoding rules are defined
+    in Section~\ref{sec:enums}.
 
   \subsection{Enum Declarations}
   \label{sec:enums}
@@ -448,6 +448,9 @@ v1beta1.mypackage.OtherName
 
     \begin{itemize}
       \item Discriminant values MAY be reused within the same enum.
+        If multiple enumeration members share the same discriminant, they are
+        semantically equivalent at the wire level and MUST be treated as
+        aliases.
       \item Discriminants MUST be elements of the set \( \{ x \in \mathbb{Z} \mid 0 \le x \le 65535 \} \).
       \item Decimal and hexadecimal literals MAY be used.
       \item The compiler MUST reject out-of-range discriminants.
@@ -467,7 +470,8 @@ v1beta1.mypackage.OtherName
       numeric value is the declared discriminant of the enumeration case.
 
       Decoders MUST reject any enum value whose discriminant does not match a
-      known case in the enum definition.
+      known case in the enum definition. Discriminants MUST NOT exceed 65535
+      prior to \texttt{VarUInt} encoding.
 
     \subsubsection{Use as Map Keys}
 
@@ -508,6 +512,73 @@ v1beta1.mypackage.OtherName
     Struct declarations MAY include nested struct definitions.  Nested
     structs are assigned fully-qualified names in the same manner as
     top-level structs.
+
+  \subsection{Annotations}
+  \label{sec:annotations}
+
+    arf supports lightweight annotations that attach metadata to declarations
+    without affecting on-the-wire encoding. An annotation is written as an
+    at-sign followed by an identifier, optionally with a parenthesized list of
+    string arguments:
+
+    \begin{lstlisting}[language=arf]
+@deprecated
+@deprecated("use NewType instead")
+@foo
+@foo()
+@bar("a", "b")
+    \end{lstlisting}
+
+    Annotation arguments, if present, MUST be string literals. Whitespace around
+    parentheses and commas is permitted. An empty argument list (e.g.,
+    \texttt{@foo()}) and an omitted argument list (e.g., \texttt{@foo}) are
+    syntactically distinct but MUST be treated equivalently by implementations.
+
+    Annotations MAY appear immediately before any of the following:
+
+    \begin{itemize}
+      \item top-level \texttt{struct} declarations;
+      \item top-level \texttt{enum} declarations;
+      \item \texttt{service} declarations;
+      \item individual \texttt{service} methods;
+      \item struct fields;
+      \item enumeration members.
+    \end{itemize}
+
+    Multiple annotations MAY be applied to the same declaration by listing them
+    on separate lines or on the same line. Annotations MUST NOT appear in any
+    other position.
+
+    Annotations are metadata only. All annotations are ignored by the binary
+    encoding rules defined in Section~\ref{sec:serialization} unless explicitly
+    stated otherwise in this specification.
+
+    This specification reserves the annotation name \texttt{@deprecated}. Other
+    annotation names MAY be defined by implementations or tooling but MUST NOT
+    alter the binary serialization or protocol semantics defined by this
+    specification.
+
+    The \texttt{@deprecated} annotation indicates that a declaration is obsolete
+    and SHOULD NOT be used by new code:
+
+    \begin{itemize}
+      \item For struct fields, \texttt{@deprecated} indicates that the field
+        remains part of the wire format (and retains its ordinal position) but
+        SHOULD be omitted by new senders when possible. Receivers MUST continue
+        to accept such fields if they appear.
+      \item For types, services, and methods, \texttt{@deprecated} indicates
+        that the declaration is retained for compatibility but SHOULD NOT be
+        referenced by new implementations.
+    \end{itemize}
+
+    If arguments are provided to \texttt{@deprecated}, their contents are
+    implementation-defined but SHOULD be treated as human-readable diagnostic
+    text (for example, a deprecation reason or replacement hint).
+
+    Compilers and tooling SHOULD emit warnings when referencing
+    \texttt{@deprecated} declarations. The presence or absence of
+    \texttt{@deprecated} MUST NOT change the encoding of any value on the wire,
+    nor affect identifier derivation.
 
   \subsection{Service Declarations}
 
@@ -579,9 +650,16 @@ v1beta1.mypackage.OtherName
     All unary parameters, unary results, and stream element types MUST be
     defined as either \texttt{struct} or \texttt{enum} types.  Primitive and
     composite types MUST NOT appear directly in RPC method signatures. This
-    limitation was deliberately created to ensure all data transmitted through
-    RPC methods are part of structures, enforcing all messages to be explicitly
-    defined.
+    limitation ensures that all data transmitted through RPC methods is carried
+    by explicitly named message types, rather than anonymous primitive or
+    composite types.
+
+    For the purposes of on-the-wire representation, the ordered list of unary
+    input parameters of a method is treated as a \emph{unary input tuple}, and
+    the ordered list of unary output values as a \emph{unary output tuple}.  A
+    tuple is not a first-class type in arf source; it is a serialization
+    construct that encodes “zero or more ordered values” as a single payload.
+    The encoding of tuples is defined in Section~\ref{sec:unary-tuples}.
 
   \subsubsection{IDL Syntax for Streams}
 
@@ -849,13 +927,12 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
     For methods, unary inputs, unary outputs, and streams MUST use structs or
     enums as specified in Section~\ref{sec:methods}.
 
-    Key equality is defined by equality of the serialized key value.
-
-    For integer keys, numeric equality applies.
-    For enumeration keys, ordinal equality applies.
+    Key equality is defined by equality of the underlying key value.
+    For integer keys, numeric equality applies. For enumeration keys,
+    equality is determined by numeric equality of their discriminants.
 
     Because structured types are forbidden as keys, equality testing is
-    deterministic and implementation-independent.
+    deterministic and independent of implementation-specific behavior.
 
   \subsection{Composite Types}
 
@@ -890,7 +967,8 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
       ordering or sorting.
 
       Keys MUST be unique according to the equality semantics of type
-      \texttt{K}.  Deserializers MUST reject maps that contain duplicate keys.
+      \texttt{K}.  Encoders MUST NOT emit duplicate keys and deserializers
+      MUST reject maps that contain duplicate keys.
 
     \subsubsection{Structs}
 
@@ -902,35 +980,37 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
       A struct value is encoded as:
 
       \begin{enumerate}
-         \item \texttt{VarUInt(L)}, where $L$ is the number of bytes in the
-           struct body that follows; and
-         \item the struct body, consisting of the presence bitmap and
-           serialized field values as described below.
+        \item \texttt{VarUInt(L)}, where $L$ is the number of bytes in the
+          struct body that follows; and
+        \item the struct body, consisting of the serialized field values in
+          declaration order.
       \end{enumerate}
 
       No field numbers or tag identifiers appear on the wire; fields are
       identified solely by their ordinal position within the struct.
 
-      Let a struct contain $m$ fields.  The struct body is encoded as follows:
+      Let a struct contain $m$ fields.  The struct body is encoded as the
+      concatenation, in declaration order, of the encodings for each field:
 
       \begin{enumerate}
-        \item Emit a presence bitmap with \emph{exactly $m$ bits}, encoded in
-          whole bytes, least-significant bit first.  The $i$th bit
-          corresponds to the $i$th field in declaration order.
+        \item For a field whose declared type is \texttt{optional<T>}:
           \begin{itemize}
-            \item For a non-optional field, the bit \emph{MUST} be set to~1.
-            \item For an \texttt{optional<T>} field, the bit is set to~1 if
-              the value is present and to~0 if the value is absent.
+            \item Emit a single \emph{presence byte}.
+              The value \texttt{0x00} denotes ``absent'' and the value
+              \texttt{0x01} denotes ``present''.  No other values are
+              permitted.
+            \item If the presence byte is \texttt{0x01}, emit the serialized
+              representation of \texttt{T}, encoded according to the
+              rules for type \texttt{T}.
+            \item If the presence byte is \texttt{0x00}, no additional bytes
+              are emitted for that field.
           \end{itemize}
 
-        \item For each field $i$ in declaration order:
-          \begin{itemize}
-            \item If the presence bit for field $i$ is~1, serialize the
-              value according to the rules for its type.
-            \item If the presence bit for field $i$ is~0, no bytes are
-              emitted for that field; this case is only legal for
-              \texttt{optional<T>} fields.
-          \end{itemize}
+        \item For a field whose declared type is not \texttt{optional<\dots>}:
+          emit the serialized representation of the field value according to
+          the rules for its type.  Encoders \emph{MUST NOT} omit such fields;
+          decoders \emph{MUST} treat truncation before the end of a required
+          field as an error.
       \end{enumerate}
 
       Decoders \emph{MUST} NOT assume knowledge of the physical layout of a
@@ -945,11 +1025,72 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
       Because field ordinals define the on-wire layout, implementations
       \emph{MUST NOT} reorder fields within a package version.
 
-  \subsection{Optional Fields}
+  \subsection{Unary Tuples}
+  \label{sec:unary-tuples}
 
-    An \texttt{optional<T>} value MAY be present or absent.  Optional fields
-    in structs use the presence bitmap described above.  Any other type or
-    composite type may be used as \texttt{T}.
+    Unary tuples are serialization-only aggregates used to carry the ordered
+    list of unary input parameters or unary output values of a method as a
+    single payload.  Tuples are not declared in arf source; they are derived
+    mechanically from the method signature.
+
+    Let a unary tuple contain $n$ values $v_0, v_1, \dots, v_{n-1}$, each
+    with a declared type $T_i$ (where each $T_i$ is a \texttt{struct} or
+    \texttt{enum}, as required by Section~\ref{sec:methods}).  The tuple is
+    encoded as:
+
+    \begin{enumerate}
+      \item \texttt{VarUInt(L)}, where $L$ is the total number of bytes
+        occupied by the concatenation of the serialized values $v_i$; and
+      \item the serialized representations of $v_0, v_1, \dots, v_{n-1}$ in
+        declaration order, each encoded according to the rules for its type.
+    \end{enumerate}
+
+    Thus, the on-wire layout of a tuple is:
+
+\[
+\text{VarUInt}(L) \;\|\; \text{encode}(v_0) \;\|\; \text{encode}(v_1) \;\|\; \dots \;\|\; \text{encode}(v_{n-1})
+\]
+
+    A tuple MAY be empty ($n = 0$).  An empty tuple is encoded as
+    \texttt{VarUInt(0)} followed by zero bytes.  This representation MAY be
+    used by future extensions but is distinct from the case where the
+    method declares no unary inputs or outputs at all (see
+    Section~\ref{sec:requests} and Section~\ref{sec:unary-output}).
+
+    Because each tuple is length-delimited by its leading \texttt{VarUInt(L)},
+    decoders can skip unknown trailing values if a method signature is
+    extended by appending unary inputs or unary outputs in a later schema
+    version, provided both sides agree on the method form and framing
+    semantics.
+
+  \subsection{Optional Fields}
+  \label{sec:optional-fields}
+
+    An \texttt{optional<T>} value MAY be present or absent.  The encoding of
+    \texttt{optional<T>} is uniform regardless of where it appears (struct
+    field, array element, map value, or nested inside other composite types).
+
+    An \texttt{optional<T>} value is encoded as:
+
+    \begin{itemize}
+      \item a single presence byte, where \texttt{0x00} denotes ``absent''
+            and \texttt{0x01} denotes ``present''; and
+      \item if the presence byte is \texttt{0x01}, the serialized
+            representation of \texttt{T}, encoded according to the rules
+            for type \texttt{T}.
+    \end{itemize}
+
+    If the presence byte is \texttt{0x00}, no additional bytes are emitted
+    for that value.
+
+    The type parameter \texttt{T} MAY be any valid arf type, including
+    primitive types, composite types (such as \texttt{array<\dots>} and
+    \texttt{map<\dots>}), structs, enums, or even another \texttt{optional<U>}.
+
+    When \texttt{optional<T>} is used as a struct field type, its encoding
+    follows the same rules as above and contributes to the struct body in
+    declaration order.  The struct length prefix continues to delimit the
+    entire struct body, allowing receivers to skip trailing fields safely.
 
   \subsection{Error Handling}
 
@@ -960,8 +1101,10 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
       \item lengths that exceed the remaining buffer,
       \item invalid UTF-8 in \texttt{string} values,
       \item duplicate keys in a \texttt{map<K,V>},
-      \item unexpected trailing bytes after a serialized value,
-      \item any violation of the structural constraints defined in this section.
+      \item trailing bytes beyond a declared length prefix for any
+        length-delimited value,
+      \item any violation of the structural constraints defined in
+        this section.
     \end{itemize}
 
     Unless explicitly specified, deserialization errors MUST be treated as
@@ -987,12 +1130,11 @@ struct User {
     \begin{center}
       \begin{tabular}{ll}
         \toprule
-        Component & Description \\
+        Component   & Description \\
         \midrule
-        VarUInt(L) & Length of the struct body in bytes \\
-        Bitmap    & 2 bits indicating presence of fields \\
-        Field 0   & \texttt{id} (uint32) \\
-        Field 1   & \texttt{name} (string) \\
+        VarUInt(L)  & Length of the struct body in bytes \\
+        Field 0     & \texttt{id} (uint32) \\
+        Field 1     & \texttt{name} (string) \\
         \bottomrule
       \end{tabular}
     \end{center}
@@ -1012,13 +1154,13 @@ struct User {
     \begin{center}
       \begin{tabular}{ll}
         \toprule
-        Component & Description \\
+        Component      & Description \\
         \midrule
-        VarUInt(L') & New struct body length \\
-        Bitmap     & 3 bits (one for each field) \\
-        Field 0    & \texttt{id} \\
-        Field 1    & \texttt{name} \\
-        Field 2    & \texttt{email} (if present) \\
+        VarUInt(L')    & New struct body length \\
+        Field 0        & \texttt{id} (uint32) \\
+        Field 1        & \texttt{name} (string) \\
+        Field 2 tag    & Presence byte for \texttt{email} (\texttt{0x00} or \texttt{0x01}) \\
+        Field 2 value  & \texttt{string} payload if present (\texttt{email}) \\
         \bottomrule
       \end{tabular}
     \end{center}
@@ -1029,13 +1171,14 @@ struct User {
     \begin{itemize}
       \item It reads \texttt{VarUInt(L')} and learns the total size of the struct body.
       \item It decodes only the fields it recognizes (the first two).
-      \item It skips the remaining bytes using the length prefix.
+      \item It treats the remaining bytes in the struct body as unknown data and skips
+        them using the length prefix.
     \end{itemize}
 
-    Because all struct values are length-delimited, receivers never need to
-    understand the internal layout of unknown fields in order to skip them safely.
-    This guarantees forward compatibility for nested structs, arrays of structs, and
-    arbitrarily complex type graphs.
+    Because all struct values are length-delimited, receivers never need to understand
+    the internal layout of unknown fields in order to skip them safely.  This guarantees
+    forward compatibility for nested structs, arrays of structs, and arbitrarily complex
+    type graphs.
 
 
 \section{RPC Protocol}
@@ -1055,8 +1198,11 @@ struct User {
   \label{sec:frame-format}
 
     Each message exchanged between a client and server is encoded as an arf
-    \emph{frame}.  Frames MUST NOT be fragmented or interleaved at the byte
-    level.  The format of a frame is:
+	\emph{frame}.  Frames are logical protocol units: bytes belonging to two
+	different frames MUST NOT be interleaved on the wire.  A single frame MAY be
+	split across multiple transport segments, but the concatenation of bytes
+	delivered by the transport for that connection MUST form a well-formed
+	sequence of complete frames.  The format of a frame is:
 
     \begin{center}
       \begin{tabular}{@{}ll@{}}
@@ -1093,28 +1239,41 @@ struct User {
             0x04  & \texttt{OUT\_STREAM}: element of an output stream. \\
             0x05  & \texttt{OUT\_CLOSE}: signals end of output stream. \\
             0x06  & \texttt{RESPONSE}: unary output payload. \\
-            0x07  & \texttt{ERROR}: terminal error. \\
+            0x07  & \texttt{ERROR}: terminal error (Section~\ref{sec:error-frames}). \\
             0x08  & \texttt{CANCEL}: client cancellation of the RPC. \\
           \bottomrule
         \end{tabular}
       \end{center}
 
+      The semantics and payloads of each frame kind are defined in
+      Section~\ref{sec:requests} and subsequent subsections. In particular:
+
+      \begin{itemize}
+        \item \texttt{CANCEL} frames MUST have a payload length of zero. The
+          \texttt{PayloadLength} field MUST encode the value~0 using
+          \texttt{VarUInt}, and no payload bytes MUST follow. Receivers MUST
+          treat any \texttt{CANCEL} frame with a non-zero payload length as a
+          protocol error.
+      \end{itemize}
+
     \subsection{Transport Assumptions}
     \label{sec:transport-assumptions}
 
-      arf is designed to run over a reliable, ordered, bidirectional transport.
-      The transport MUST preserve byte order and MUST NOT duplicate or reorder
-      bytes.  Examples of suitable transports include TCP connections, QUIC
-      streams, and Unix domain sockets.
+    arf is designed to run over a reliable, ordered, bidirectional transport.
+    The transport MUST preserve byte order and MUST NOT duplicate or reorder
+    bytes. Examples of suitable transports include TCP connections, QUIC streams,
+    and Unix domain sockets.
 
-      arf frames, as defined in Section~\ref{sec:frame-format}, are logical
-      protocol units and do not necessarily correspond to transport-level
-      segments.  Endpoints MUST be able to reconstruct frames from an
-      arbitrary segmentation of the underlying byte stream.
+    Frames, as defined in Section~\ref{sec:frame-format}, are logical protocol
+    units and do not necessarily align with transport-level segmentation.
+    Implementations MUST tolerate arbitrary segmentation of frames by the
+    underlying transport and MUST reconstruct complete frames from the incoming
+    byte stream. Bytes belonging to different frames MUST NOT be interleaved on
+    the wire (see Section~\ref{sec:frame-format}).
 
-      Datagram-oriented transports (such as bare UDP) do not satisfy these
-      requirements without additional reliability and ordering mechanisms.
-      Such mechanisms are out of scope for this specification.
+    Datagram-oriented transports (such as bare UDP) do not satisfy these
+    requirements without additional reliability and ordering mechanisms. Such
+    mechanisms are out of scope for this specification.
 
     \subsection{Connection Model and Multiplexing}
     \label{sec:multiplexing}
@@ -1142,8 +1301,16 @@ struct User {
         \end{itemize}
 
         Implementations MUST treat the receipt of frames for an unknown or
-        inactive \texttt{CorrelationID} (that is, a \texttt{CorrelationID} for
-        which no active RPC exists) as a protocol error.
+        inactive \texttt{CorrelationID} as a protocol error, \emph{except}
+        for \texttt{CANCEL} frames. A \texttt{CorrelationID} is considered
+        inactive if and only if the completion conditions in
+        Section~\ref{sec:rpc-completion} have been satisfied for that
+        identifier.
+
+        A \texttt{CANCEL} frame received for an unknown or inactive
+        \texttt{CorrelationID} (as defined in Section~\ref{sec:rpc-completion})
+        MUST be silently ignored and MUST NOT be treated as a protocol
+        violation.
 
       \subsubsection{Concurrent RPCs}
 
@@ -1250,8 +1417,8 @@ struct User {
         silently.
 
         Implementations MUST treat the input byte stream as an ordered sequence of
-      octets.  No Unicode normalization, case-folding, or locale-sensitive
-      transformation is permitted.
+        octets.  No Unicode normalization, case-folding, or locale-sensitive
+        transformation is permitted.
 
         The normative description and reference implementation of the FNV-1a
         algorithm appear below.
@@ -1274,7 +1441,27 @@ FNV-1a-32(input):
       in \hyperref[annex:a]{Appendix A} and \hyperref[annex:b]{Appendix B},
       respectively.
 
+    \subsubsection{Identifier Invariance Across Frames}
+    \label{sec:identifier-invariance}
 
+      For a given \texttt{CorrelationID}, the tuple
+      (\texttt{PackageID}, \texttt{ServiceID}, \texttt{MethodID}) defines the
+      identity of the target method and MUST remain constant across all frames
+      belonging to that RPC.
+
+      Specifically:
+
+      \begin{itemize}
+        \item The \texttt{INVOKE} frame establishes the authoritative tuple of
+          identifiers for the RPC.
+        \item Every subsequent frame with the same \texttt{CorrelationID}
+          (\texttt{IN\_STREAM}, \texttt{OUT\_STREAM}, \texttt{RESPONSE},
+          \texttt{CANCEL}, \texttt{ERROR}, etc.) MUST carry the exact same
+          identifier values.
+        \item Receivers MUST treat any frame whose identifiers do not exactly
+          match the established tuple for the corresponding
+          \texttt{CorrelationID} as a protocol error.
+      \end{itemize}
 
   \subsection{Requests}
   \label{sec:requests}
@@ -1284,14 +1471,32 @@ FNV-1a-32(input):
     form:
 
     \begin{itemize}
-      \item If \textbf{HasInput} is true, the payload MUST contain the
-        serialization of the unary input struct.
-      \item If \textbf{HasInput} is false, the payload MUST be empty.
-      \item If \textbf{HasInputStream} is true, the input stream is
-        considered open immediately after the \texttt{INVOKE} frame.  The
-        client MAY send zero or more \texttt{IN\_STREAM} frames, followed
-        by exactly one \texttt{IN\_CLOSE}.
+      \item If \textbf{HasInput} is \texttt{true}, the \texttt{INVOKE} payload
+        MUST contain the serialization of the unary input \emph{tuple},
+        consisting of the ordered sequence of unary input values as declared
+        in the method signature.
+      \item If \textbf{HasInput} is \texttt{false}, the payload MUST be empty.
+      \item If \textbf{HasInputStream} is \texttt{true}, the input stream is
+        considered open immediately after the \texttt{INVOKE} frame.
+        The client MAY send zero or more \texttt{IN\_STREAM} frames.
+        If the RPC completes normally (i.e., without cancellation or error),
+        the client MUST send exactly one \texttt{IN\_CLOSE}.
+
+        If the RPC is aborted by sending \texttt{CANCEL}, the client MUST
+        NOT send \texttt{IN\_CLOSE}. Cancellation implicitly closes the
+        input stream.
     \end{itemize}
+
+    The unary input tuple is encoded as:
+
+    \begin{enumerate}
+      \item \texttt{VarUInt(L)}, where $L$ is the total byte length of
+        the tuple payload.
+      \item The serialized representation of each unary input value, in
+        declaration order.
+    \end{enumerate}
+
+    Each unary input value MUST be a struct or enum instance.
 
     A client MUST NOT send additional \texttt{INVOKE} frames with the same
     \texttt{CorrelationID}.  Doing so constitutes a protocol error.
@@ -1314,7 +1519,7 @@ FNV-1a-32(input):
 
       \begin{table}[htb]
         \centering
-        \caption{arf Method Forms and Permitted Streaming Frames (per \texttt{CorrelationID})}
+        \caption{arf Method Forms and Permitted Streaming Frames \\ (Successful Completion Only; Cancellation Overrides)}
         \label{tab:method-forms}
         \begin{tabular}{lcccccccc}
           \toprule
@@ -1349,6 +1554,13 @@ FNV-1a-32(input):
       \end{table}
 
       \noindent
+      \textbf{Note:} The permissions in this table apply only to RPCs that
+      complete successfully. If an RPC is terminated by \texttt{CANCEL} or
+      \texttt{ERROR}, \texttt{IN\_CLOSE} and \texttt{OUT\_CLOSE} are neither
+      required nor permitted. Cancellation semantics are defined in
+      Section~\ref{sec:cancellation}.
+
+      \noindent
       Legend:
 
       \begin{itemize}
@@ -1362,44 +1574,146 @@ FNV-1a-32(input):
         \item S:OC = server MAY send \texttt{OUT\_CLOSE}
       \end{itemize}
 
+      The following rules apply only to RPCs that complete successfully. In the
+      presence of cancellation or error, the stream-termination requirements in
+      this section are overridden by the cancellation and error semantics
+      defined in Section~\ref{sec:error-and-cancel}.
+
       For each form, the following additional constraints apply, per
       \texttt{CorrelationID}:
 
       \begin{itemize}
         \item Exactly one \texttt{INVOKE} frame MUST be sent, and it MUST be
           the first frame.
-        \item If HasInS is \texttt{Y}, the client MAY send zero or more
-          \texttt{IN\_STREAM} frames followed by exactly one
-          \texttt{IN\_CLOSE}.  If HasInS is \texttt{N}, the client MUST
-          NOT send \texttt{IN\_STREAM} or \texttt{IN\_CLOSE}.
-        \item If HasOutS is \texttt{Y}, the server MAY send zero or more
-          \texttt{OUT\_STREAM} frames followed by exactly one
-          \texttt{OUT\_CLOSE}.  If HasOutS is \texttt{N}, the server MUST
-          NOT send \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE}.
+        \item If HasInS is \texttt{Y} and the RPC completes successfully, the
+          client MAY send zero or more \texttt{IN\_STREAM} frames followed by
+          exactly one \texttt{IN\_CLOSE}. If the RPC is terminated by
+          \texttt{CANCEL} or \texttt{ERROR}, \texttt{IN\_CLOSE} MUST NOT be
+          sent. If HasInS is \texttt{N}, the client MUST NOT send
+          \texttt{IN\_STREAM} or \texttt{IN\_CLOSE} at any time.
+
+        \item If HasOutS is \texttt{Y} and the RPC completes successfully, the
+          server MAY send zero or more \texttt{OUT\_STREAM} frames followed by
+          exactly one \texttt{OUT\_CLOSE}. If the RPC is terminated by
+          \texttt{CANCEL} or \texttt{ERROR}, \texttt{OUT\_CLOSE} MUST NOT be
+          sent. If HasOutS is \texttt{N}, the server MUST NOT send
+          \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} at any time.
       \end{itemize}
 
     \subsubsection{RPC Completion}
     \label{sec:rpc-completion}
 
-      For a given \texttt{CorrelationID}, an RPC is considered complete
-      when one of the following conditions holds:
+      An RPC is considered to have completed \emph{successfully} if and only if
+      it terminates via \texttt{RESPONSE} and all required stream closures have
+      been observed for that RPC, as defined below.
+
+      Any RPC whose lifecycle includes a terminal \texttt{ERROR} frame is
+      considered to have completed abnormally.
+
+      For an RPC that is still active at the server, client-initiated
+      cancellation necessarily results in abnormal completion: upon receiving a
+      \texttt{CANCEL} frame for an active RPC, the server MUST terminate the RPC
+      and send exactly one terminal \texttt{ERROR} acknowledgement for that
+      \texttt{CorrelationID} (Section~\ref{sec:cancellation}). A
+      \texttt{CANCEL} received after the server has already considered the RPC
+      complete is a late control signal and does not change the completion
+      state or produce an additional \texttt{ERROR} frame.
+
+      For a given \texttt{CorrelationID}, an RPC is considered complete, from the
+      point of view of a given endpoint, when that endpoint has observed one of
+      the following terminal conditions for that endpoint:
 
       \begin{itemize}
-        \item An \texttt{ERROR} frame has been received, or
-        \item A \texttt{CANCEL} frame has been received, or
-        \item A \texttt{RESPONSE} frame has been received and all streams
-          declared by the method form have been closed:
+        \item The endpoint has sent or received an \texttt{ERROR} frame for that
+          \texttt{CorrelationID}; or
+
+        \item The endpoint has observed both:
           \begin{itemize}
-            \item if \textbf{HasInputStream} is \texttt{true}, an
-              \texttt{IN\_CLOSE} frame has been received; and
-            \item if \textbf{HasOutputStream} is \texttt{true}, an
-              \texttt{OUT\_CLOSE} frame has been received.
+            \item successful unary completion; and
+            \item closure of every stream flowing \emph{toward} that endpoint.
           \end{itemize}
       \end{itemize}
 
-      Once any of the above conditions is satisfied, endpoints MUST treat
-      the \texttt{CorrelationID} as inactive and MUST NOT send further
-      frames with that \texttt{CorrelationID}.
+      Unary completion is directional:
+
+      \begin{itemize}
+        \item From the \textbf{client}'s perspective, unary completion occurs
+          when it has \emph{received} a \texttt{RESPONSE} frame for the
+          \texttt{CorrelationID}.
+        \item From the \textbf{server}'s perspective, unary completion occurs
+          when it has \emph{sent} a \texttt{RESPONSE} frame for the
+          \texttt{CorrelationID}.
+      \end{itemize}
+
+      Stream closure is also directional:
+
+      \begin{itemize}
+        \item A stream flowing \emph{from the client to the server} (the input
+          stream when \textbf{HasInputStream} is \texttt{true}) is considered
+          closed:
+          \begin{itemize}
+            \item by the \textbf{client} when it has \emph{sent} exactly one
+              \texttt{IN\_CLOSE} frame; and
+            \item by the \textbf{server} when it has \emph{received} exactly one
+              \texttt{IN\_CLOSE} frame.
+          \end{itemize}
+
+        \item A stream flowing \emph{from the server to the client} (the output
+          stream when \textbf{HasOutputStream} is \texttt{true}) is considered
+          closed:
+          \begin{itemize}
+            \item by the \textbf{server} when it has \emph{sent} exactly one
+              \texttt{OUT\_CLOSE} frame; and
+            \item by the \textbf{client} when it has \emph{received} exactly one
+              \texttt{OUT\_CLOSE} frame.
+          \end{itemize}
+      \end{itemize}
+
+      Thus, for a \emph{successful} RPC (no \texttt{ERROR} frame), the client
+      considers the RPC complete when:
+
+      \begin{itemize}
+        \item it has received \texttt{RESPONSE}, and
+        \item if \textbf{HasOutputStream} is \texttt{true}, it has received
+          \texttt{OUT\_CLOSE}, and
+        \item if \textbf{HasInputStream} is \texttt{true}, it has sent
+          \texttt{IN\_CLOSE}.
+      \end{itemize}
+
+      Symmetrically, the server considers the RPC complete when:
+
+      \begin{itemize}
+        \item it has sent \texttt{RESPONSE}, and
+        \item if \textbf{HasInputStream} is \texttt{true}, it has received
+          \texttt{IN\_CLOSE}, and
+        \item if \textbf{HasOutputStream} is \texttt{true}, it has sent
+          \texttt{OUT\_CLOSE}.
+      \end{itemize}
+
+      A \texttt{CANCEL} frame is not itself a terminal condition; it is a
+      control signal that requests termination of the RPC and triggers the
+      error semantics described in Section~\ref{sec:cancellation} and
+      Section~\ref{sec:error-frames}.
+
+      Once any of the above terminal conditions is satisfied for an endpoint,
+      that endpoint MUST treat the corresponding \texttt{CorrelationID} as
+      inactive and MUST NOT send any further frames with that
+      \texttt{CorrelationID}.
+
+      With the exception of late \texttt{CANCEL} frames (see
+      Section~\ref{sec:cancellation}), any frame received for an inactive
+      \texttt{CorrelationID} MUST be treated as a protocol error and SHOULD
+      cause the connection to be closed.
+
+      Endpoints MUST NOT reuse a \texttt{CorrelationID} for a new RPC while
+      they still consider the existing RPC for that identifier to be active.
+      In particular, sending or receiving a \texttt{CANCEL} frame does not, by
+      itself, render an RPC complete. A client that has sent \texttt{CANCEL}
+      MUST NOT reuse the corresponding \texttt{CorrelationID} on that
+      connection until it has either observed a terminal condition for the
+      RPC (an \texttt{ERROR} frame or the appropriate combination of
+      \texttt{RESPONSE} and stream closures) or closed the underlying
+      transport connection.
 
   \subsection{Interleaving of Input and Output Streams}
 
@@ -1415,11 +1729,15 @@ FNV-1a-32(input):
     input elements regardless of whether the server is actively sending
     output elements, and vice versa.
 
+    A server MAY transmit \texttt{RESPONSE} before, during, or after any
+    stream activity. No ordering relationship is implied unless explicitly
+    stated by a method’s application semantics.
+
   \subsection{Unary vs Streaming Semantics}
 
     \subsubsection{Unary Input}
       If \textbf{HasInput} is true, the \texttt{INVOKE} payload MUST contain a
-      serialized unary input struct.  If false, the payload MUST be empty.
+      serialized unary input tuple.  If false, the payload MUST be empty.
 
     \subsubsection{Input Stream}
       If \textbf{HasInputStream} is true:
@@ -1428,12 +1746,19 @@ FNV-1a-32(input):
         \item The client MAY send zero or more \texttt{IN\_STREAM} frames.
         \item Each \texttt{IN\_STREAM} frame MUST contain exactly one serialized
           element of the declared input stream type.
-        \item The client MUST send exactly one \texttt{IN\_CLOSE}.
+        \item If \textbf{HasInputStream} is \texttt{true} and the RPC
+          completes normally, the client MUST send exactly one
+          \texttt{IN\_CLOSE} when the RPC completes normally.
+
+          If the RPC is terminated by \texttt{CANCEL} or \texttt{ERROR}, the
+          client MUST NOT send \texttt{IN\_CLOSE}. Cancellation or error
+          implicitly closes the input stream.
         \item After \texttt{IN\_CLOSE}, no further inbound stream frames are
           permitted.
       \end{itemize}
 
     \subsubsection{Unary Output}
+    \label{sec:unary-output}
 
       For every RPC that completes successfully (that is, does not terminate
       with an \texttt{ERROR} frame), the server MUST send exactly one
@@ -1447,9 +1772,15 @@ FNV-1a-32(input):
       \texttt{OUT\_CLOSE} frames before the \texttt{RESPONSE} frame.
 
       If \textbf{HasOutput} is \texttt{true}, the payload of the
-      \texttt{RESPONSE} frame MUST contain the serialized unary output
-      struct or tuple.  If \textbf{HasOutput} is \texttt{false}, the payload
-      of the \texttt{RESPONSE} frame MUST be empty.
+      \texttt{RESPONSE} frame MUST contain the serialized unary output tuple,
+      encoded as specified in Section~\ref{sec:unary-tuples}, using the unary
+      output values in their declaration order.  If \textbf{HasOutput} is
+      \texttt{false}, the payload of the \texttt{RESPONSE} frame MUST be
+      empty.
+
+      The transmission of a \texttt{RESPONSE} frame does not imply closure
+      of any input or output streams. Unary output and stream lifetimes
+      are independent.
 
     \subsubsection{Unary Output Ordering}
 
@@ -1471,8 +1802,12 @@ FNV-1a-32(input):
         \item The server MAY send zero or more \texttt{OUT\_STREAM} frames.
         \item Each \texttt{OUT\_STREAM} frame MUST contain exactly one
           serialized element of the declared output stream type.
-        \item The server MUST send exactly one \texttt{OUT\_CLOSE} frame to
-          indicate the end of the output stream.
+        \item If the RPC completes successfully, the server MUST send exactly
+          one \texttt{OUT\_CLOSE} frame.
+
+          If the RPC terminates due to \texttt{CANCEL} or \texttt{ERROR}, the
+          server MUST NOT send \texttt{OUT\_CLOSE}. Cancellation or error
+          implicitly closes the output stream.
         \item The server MUST NOT send any \texttt{OUT\_STREAM} or
           \texttt{OUT\_CLOSE} frames before the \texttt{RESPONSE} frame.
         \item After sending \texttt{OUT\_CLOSE}, the server MUST NOT send any
@@ -1523,6 +1858,12 @@ IN_STREAM(CID, T)
 IN_CLOSE(CID)
       \end{lstlisting}
 
+      \noindent
+
+      \textbf{Note:} This example demonstrates that unary completion does not
+      imply closure of the input stream. The server may legally return before
+      the client finishes sending input elements.
+
     \subsubsection{Form: YYYY (full bidirectional streaming + unary input/output)}
 
 
@@ -1540,23 +1881,158 @@ OUT_CLOSE(CID)
       \end{lstlisting}
 
 
-  \subsection{Cancellation and Error Semantics}
+  \subsection{Error and Cancellation Semantics}
+  \label{sec:error-and-cancel}
 
-    A client MAY abort an ongoing RPC using a \texttt{CANCEL} frame with the
-    same \texttt{CorrelationID} as the active call.  Upon receiving
-    \texttt{CANCEL}, the server:
+    \subsubsection{Error Frames}
+    \label{sec:error-frames}
 
-    \begin{itemize}
-      \item MUST cease sending further frames for that \texttt{CorrelationID},
-      \item MAY release any associated resources immediately,
-      \item MAY send an \texttt{ERROR} frame if additional diagnostic
-        information is available.
-    \end{itemize}
+      An \texttt{ERROR} frame represents terminal failure or non-successful
+      termination of an RPC for the associated \texttt{CorrelationID}.  For a
+      given \texttt{CorrelationID}:
 
-    A server MAY emit an \texttt{ERROR} frame at any time to signal an
-    irrecoverable condition.  Upon receiving \texttt{ERROR}, the client MUST
-    treat the RPC as terminated and MUST NOT send additional frames for that
-    \texttt{CorrelationID}.
+      \begin{itemize}
+        \item At most one \texttt{ERROR} frame MAY be sent per endpoint for a
+          given RPC.
+        \item Once an endpoint has sent an \texttt{ERROR} frame, it MUST NOT send
+          any further frames with that \texttt{CorrelationID}.
+        \item Once an endpoint has received an \texttt{ERROR} frame, it MUST
+          treat the RPC as terminated and MUST ignore any subsequent frames
+          \emph{for that RPC} with that \texttt{CorrelationID}.
+      \end{itemize}
+
+      The payload of an \texttt{ERROR} frame is defined as follows:
+
+      \begin{itemize}
+        \item If \texttt{PayloadLength} is zero, the \texttt{ERROR} frame carries
+          no structured payload.  The reason for termination is implementation-
+          defined and MAY be inferred from local context only.
+        \item If \texttt{PayloadLength} is non-zero, the payload MUST consist of
+          the serialized representation of exactly one \emph{RPC error
+          descriptor}, encoded according to Section~\ref{sec:serialization}.
+      \end{itemize}
+
+      The RPC error descriptor has the following logical structure:
+
+      \begin{lstlisting}[language=arf]
+struct RPCError {
+    code    uint32;
+    message string;
+    details optional<bytes>;
+}
+      \end{lstlisting}
+
+      The fields have the following semantics:
+
+      \begin{itemize}
+        \item \texttt{code} is a numeric error code.  This specification reserves
+          the following well-known values:
+
+          \begin{itemize}
+            \item \texttt{0}: \textbf{OK}.  The RPC terminated without
+              application-level error.  This code is intended primarily for use
+              with cancellation acknowledgements (see
+              Section~\ref{sec:cancellation}).
+            \item \texttt{1}: \textbf{CANCELLED}.  The RPC was terminated because
+              the client requested cancellation.
+            \item \texttt{2}: \textbf{UNKNOWN}.  An unspecified server-side
+              failure occurred.
+          \end{itemize}
+
+          Additional code values MAY be defined by implementations and
+          application profiles.
+
+        \item \texttt{message} is a human-readable diagnostic string intended for
+          logging and debugging.  It MUST NOT be relied on for programmatic
+          behavior.
+
+        \item \texttt{details} is an optional opaque blob that MAY carry
+          application-specific structured information (for example, a serialized
+          domain-specific error structure).  Its interpretation is entirely
+          out-of-band and MAY vary between deployments.
+      \end{itemize}
+
+      Implementations SHOULD attempt to decode any non-empty \texttt{ERROR}
+      payload as \texttt{RPCError}.  If decoding fails, the receiver MUST still
+      treat the \texttt{ERROR} frame as a terminal condition for the RPC and MAY
+      surface a generic error to the application.
+
+      The existence, absence, or contents of an \texttt{ERROR} payload MUST NOT
+      affect the framing, completion, or cancellation rules defined elsewhere in
+      this specification.
+
+    \subsubsection{Cancellation}
+    \label{sec:cancellation}
+
+      A client MAY abort an ongoing RPC using a \texttt{CANCEL} frame with the
+      same \texttt{CorrelationID} as the active call.  A \texttt{CANCEL} frame
+      MUST carry an empty payload; its \texttt{PayloadLength} field MUST be zero.
+
+      Upon receiving a \texttt{CANCEL} frame for an \emph{active} RPC (that is,
+      one for which the completion conditions in
+      Section~\ref{sec:rpc-completion} have not yet been satisfied), the
+      server:
+
+      \begin{itemize}
+        \item MUST cease processing the RPC and release any associated resources
+          as soon as practical;
+        \item MUST NOT send any further frames related to that
+          \texttt{CorrelationID}, \emph{except} as permitted below;
+        \item MUST send exactly one terminal \texttt{ERROR} frame for that
+          \texttt{CorrelationID}, as defined in Section~\ref{sec:error-frames};
+          and
+        \item MUST send no further frames after that \texttt{ERROR}.
+      \end{itemize}
+
+      If the server receives a \texttt{CANCEL} frame for a
+      \texttt{CorrelationID} that it already considers inactive (because the
+      RPC has completed according to Section~\ref{sec:rpc-completion}), it
+      MUST treat the \texttt{CANCEL} as a late control signal, MUST NOT send
+      any additional frames (including \texttt{ERROR}) in response, and MUST
+      NOT treat the late \texttt{CANCEL} as a protocol error solely by virtue
+      of its arrival after completion.
+
+      When acknowledging a client-initiated cancellation that did not surface an
+      application-level failure, the server SHOULD use an \texttt{ERROR} payload
+      whose \texttt{RPCError.code} is either:
+
+      \begin{itemize}
+        \item \texttt{0} (\textbf{OK}), indicating that the RPC was cancelled at
+          the client's request and no error occurred; or
+        \item \texttt{1} (\textbf{CANCELLED}), indicating that the RPC was
+          terminated due to client cancellation and that the server did not
+          complete normal processing.
+      \end{itemize}
+
+      The choice between \texttt{OK} and \texttt{CANCELLED} is a policy decision
+      for the implementation.  In both cases, the \texttt{ERROR} frame serves as
+      a definitive acknowledgement that the server has observed and acted upon
+      the \texttt{CANCEL}.
+
+      A client that sends \texttt{CANCEL}:
+
+      \begin{itemize}
+        \item MUST NOT send any frames other than the \texttt{CANCEL} itself for
+            that \texttt{CorrelationID} after transmitting \texttt{CANCEL};
+        \item MAY treat the RPC as terminated for local application purposes
+          immediately after sending \texttt{CANCEL} (for example, by releasing
+          local resources or failing any associated futures or promises);
+        \item MUST NOT reuse the \texttt{CorrelationID} for a new RPC on that
+          connection until it has either observed a terminal condition as
+          defined in Section~\ref{sec:rpc-completion} or closed the underlying
+          transport connection; and
+        \item SHOULD ignore any subsequently received application-level frames
+          other than the terminal \texttt{ERROR} acknowledgement, if it chooses
+          to continue reading from the connection.
+      \end{itemize}
+
+      If a \texttt{CANCEL} frame is received for an RPC that has already
+      completed, the receiver MUST ignore the frame and MUST NOT respond
+      with an \texttt{ERROR}.
+
+      Sending \texttt{CANCEL} implicitly closes the input stream and/or output
+      stream, if any are currently open. No \texttt{IN\_CLOSE} or
+      \texttt{OUT\_CLOSE} frames are required or permitted after cancellation.
 
   \subsection{Backpressure}
 
@@ -1574,8 +2050,8 @@ OUT_CLOSE(CID)
   arf is designed to permit incremental schema evolution without requiring
   explicit field identifiers in source files.  Compatibility is achieved by
   combining stable field ordinals with length-prefixed struct encoding, allowing
-  new fields to be added while preserving the ability of older implementations to
-  safely skip unknown data.
+  new fields to be added while preserving the ability of older implementations
+  to safely skip unknown data.
 
   The rules in this section govern how types may change across package versions
   while maintaining compatibility at the binary level.
@@ -1583,17 +2059,18 @@ OUT_CLOSE(CID)
   \subsection{Adding Fields}
 
     New fields MAY be appended to the end of an existing struct.  Because field
-    ordinal indices are defined by declaration order, appending a field assigns it
-    the next available ordinal.  Existing ordinals MUST NOT change.
+    ordinal indices are defined by declaration order, appending a field assigns
+    it the next available ordinal.  Existing ordinals MUST NOT change.
 
     Struct values are length-prefixed as defined in
-    Section~\ref{sec:serialization}.  As a result, receivers MUST skip any trailing
-    bytes in the struct body beyond the fields they recognize.  This allows new
-    fields to be introduced in a backward-compatible and forward-compatible manner.
+    Section~\ref{sec:serialization}.  As a result, receivers MUST skip any
+    trailing bytes in the struct body beyond the fields they recognize.  This
+    allows new fields to be introduced in a backward-compatible and
+    forward-compatible manner.
 
-    Senders MAY include newly added fields when communicating with older receivers;
-    older receivers MUST ignore trailing bytes safely.  Likewise, senders MAY omit
-    fields not known to the peer.
+    Senders MAY include newly added fields when communicating with older
+    receivers; older receivers MUST ignore trailing bytes safely.  Likewise,
+    senders MAY omit fields not known to the peer.
 
     New fields SHOULD be declared as \texttt{optional<T>} unless the semantics
     require mandatory presence.  Using \texttt{optional<T>} maximizes flexibility
@@ -2050,21 +2527,36 @@ static inline int64_t arf_zigzag64_decode(uint64_t z) {
 
     \subsection{Error Mapping and Diagnostics}
 
-      arf does not define a structured error payload format.  Implementations
-      typically wrap \texttt{ERROR} frames with an application-specific
-      structure that includes:
+      arf defines a structured error payload format for \texttt{ERROR} frames
+      via the \texttt{RPCError} descriptor (Section~\ref{sec:error-frames}). This
+      structure provides a machine-readable error code, a human-readable message,
+      and optional opaque details.
+
+      Implementations SHOULD define internal error categories and map them onto
+      \texttt{RPCError} as follows:
 
       \begin{itemize}
-        \item a machine-readable error code,
-        \item a human-readable message,
-        \item optional metadata such as retry hints or correlation tokens.
+        \item transport-level failures (e.g., I/O errors, broken connections)
+          SHOULD generally result in connection closure rather than an
+          \texttt{ERROR} frame, as the framing layer is no longer reliable;
+        \item framing- and decoding-level errors that occur \emph{after} a valid
+          frame boundary has been established MAY be mapped to an
+          \texttt{ERROR} frame if the connection remains otherwise usable;
+        \item application-level failures SHOULD be reported via structured
+          \texttt{RPCError} values with implementation-defined codes and
+          messages.
       \end{itemize}
 
-      It is RECOMMENDED that runtimes map transport- or decoding-level failures
-      (such as malformed frames, invalid VarUInt encodings, or type width
-      violations) to \texttt{ERROR} frames only when the connection remains
-      otherwise usable.  If the integrity of the framing layer is in doubt
-      (for example, due to a bad magic number or a severely malformed header),
-      the implementation SHOULD close the connection instead of attempting to
-      recover.
+      Implementations SHOULD use the \texttt{RPCError.details} field sparingly and
+      only for optional, diagnostic data that is safe to expose. This field MAY
+      carry structured, application-specific error information encoded out of
+      band, but no interoperability is implied unless both peers explicitly
+      agree on its format.
+
+      Error messages are intended for human diagnostics and logging only and MUST
+      NOT be relied upon for programmatic behavior.
+
+      If an \texttt{ERROR} frame is received with an unparseable or malformed
+      payload, the receiver MUST still treat the frame as terminal for the RPC
+      and MAY surface a generic failure to the application.
 \end{document}
