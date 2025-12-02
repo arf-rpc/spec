@@ -735,7 +735,7 @@ YYYY(i I, stream T) -> (O, stream U);
     lengths) are encoded using the \texttt{VarUInt} scheme (and ZigZag +
     \texttt{VarUInt} for signed integers), unless explicitly stated otherwise.
     Floating-point values are encoded in IEEE~754 binary formats using
-    little-endian byte order.  Variable-length entities (such as strings,
+    big-endian byte order.  Variable-length entities (such as strings,
     byte sequences, arrays, and maps) are prefixed with a length encoded using
     the variable-length integer scheme described in Section~\ref{sec:length-encoding}.
 
@@ -909,7 +909,7 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
         it using \texttt{VarUInt}; decoders MUST recover $n$ from $z$ and verify
         that it lies within the range of the declared signed type.
       \item \textbf{float32}, \textbf{float64}: encoded in IEEE~754 binary32
-        or binary64 format respectively, using little-endian byte order.
+        or binary64 format respectively, using big-endian byte order.
       \item \textbf{string}: encoded as \texttt{VarUInt(length)} followed by
         \texttt{length} bytes containing UTF-8 encoded scalar values.
         Invalid UTF-8 byte sequences MUST cause deserialization to fail.
@@ -1191,7 +1191,7 @@ struct User {
   Section~\ref{RPC-MethodForms}.
 
   Unless otherwise noted, all multi-byte integer fields are encoded in
-  little-endian byte order.  All frames are self-contained and do not rely
+  big-endian byte order.  All frames are self-contained and do not rely
   on lower-layer segmentation semantics.
 
   \subsection{Frame Format}
