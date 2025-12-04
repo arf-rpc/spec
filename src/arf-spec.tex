@@ -1065,6 +1065,70 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
     version, provided both sides agree on the method form and framing
     semantics.
 
+  \subsection{Metadata Blocks}
+  \label{sec:metadata}
+
+    Metadata are out-of-band, key--value annotations attached to an RPC
+    request or response.  Metadata are carried only on the wire and do not
+    appear in arf source files, the IDL grammar, or the ABNF.  This
+    specification does not define any standard metadata keys or values; all
+    semantics are application-defined.
+
+    A metadata block is a length-delimited sequence of zero or more metadata
+    entries.  It is encoded as:
+
+    \begin{enumerate}
+      \item \texttt{VarUInt(L)}, where $L$ is the number of bytes in the
+        metadata body that follows; and
+      \item exactly $L$ bytes forming the metadata body.
+    \end{enumerate}
+
+    The metadata body is itself a concatenation of zero or more \emph{metadata
+    entries}.  Each entry consists of:
+
+    \begin{enumerate}
+      \item \texttt{VarUInt(klen)}, the length in bytes of the key;
+      \item \texttt{klen} bytes of key data; and
+      \item \texttt{VarUInt(vlen)}, the length in bytes of the value; and
+      \item \texttt{vlen} bytes of value data.
+    \end{enumerate}
+
+    Keys are encoded as raw octets but MUST be restricted to the following
+    ASCII character set:
+
+    \begin{itemize}
+      \item lowercase letters \texttt{a}--\texttt{z},
+      \item digits \texttt{0}--\texttt{9},
+      \item hyphen \texttt{-}, underscore \texttt{\_}, and period \texttt{.}.
+    \end{itemize}
+
+    The key length \texttt{klen} MUST be greater than zero.  Implementations
+    MUST reject metadata blocks that contain keys with invalid characters or
+    zero-length keys.
+
+    Values are arbitrary binary payloads.  No encoding, structure, or
+    interpretation is imposed by this specification.  Implementations MAY
+    treat value bytes as opaque and MAY choose to ignore some or all
+    metadata entries.
+
+    Keys MAY appear multiple times within the same metadata block.  The
+    ordering of entries, including duplicated keys, MUST be preserved by
+    the encoder and decoder.  The meaning of duplicate keys, if any, is
+    entirely application-defined and outside the scope of this
+    specification.
+
+    A metadata block with \texttt{L = 0} encodes an empty metadata set and
+    occupies a single \texttt{VarUInt(0)} byte on the wire.  Endpoints that
+    do not wish to attach metadata MUST still emit and consume the metadata
+    length prefix, and MAY treat the metadata body as opaque and skip it
+    using the length prefix.
+
+    Metadata blocks are carried only in the payloads of \texttt{INVOKE} and
+    \texttt{RESPONSE} frames in this version of the protocol.  Streaming
+    frames (\texttt{IN\_STREAM}, \texttt{IN\_CLOSE}, \texttt{OUT\_STREAM},
+    \texttt{OUT\_CLOSE}), \texttt{CANCEL} frames, and \texttt{ERROR} frames
+    MUST NOT contain metadata blocks.
+
   \subsection{Optional Fields}
   \label{sec:optional-fields}
 
@@ -1473,20 +1537,24 @@ FNV-1a-32(input):
     form:
 
     \begin{itemize}
-      \item If \textbf{HasInput} is \texttt{true}, the \texttt{INVOKE} payload
-        MUST contain the serialization of the unary input \emph{tuple},
-        consisting of the ordered sequence of unary input values as declared
-        in the method signature.
-      \item If \textbf{HasInput} is \texttt{false}, the payload MUST be empty.
+      \item The payload of every \texttt{INVOKE} frame MUST begin with exactly
+        one metadata block encoded as described in Section~\ref{sec:metadata}.
+
+      \item If \textbf{HasInput} is \texttt{true}, the metadata block MUST be
+        immediately followed by the serialization of the unary input tuple.
+
+      \item If \textbf{HasInput} is \texttt{false}, the payload MUST consist
+      solely of the metadata block. An empty metadata set is encoded as a
+      metadata block of length zero.
+
       \item If \textbf{HasInputStream} is \texttt{true}, the input stream is
         considered open immediately after the \texttt{INVOKE} frame.
         The client MAY send zero or more \texttt{IN\_STREAM} frames.
         If the RPC completes normally (i.e., without cancellation or error),
         the client MUST send exactly one \texttt{IN\_CLOSE}.
 
-        If the RPC is aborted by sending \texttt{CANCEL}, the client MUST
-        NOT send \texttt{IN\_CLOSE}. Cancellation implicitly closes the
-        input stream.
+        If the RPC is aborted by sending \texttt{CANCEL}, the client MUST NOT
+        send \texttt{IN\_CLOSE}. Cancellation implicitly closes the input stream.
     \end{itemize}
 
     The unary input tuple is encoded as:
@@ -1742,33 +1810,32 @@ FNV-1a-32(input):
     input elements regardless of whether the server is actively sending
     output elements, and vice versa.
 
-    A server MAY transmit \texttt{RESPONSE} before, during, or after any
-    stream activity. No ordering relationship is implied unless explicitly
-    stated by a method’s application semantics.
+    The server MUST transmit the \texttt{RESPONSE} frame before sending any
+    \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} frames, as specified in
+    Section~\ref{sec:unary-output}. Input and output streams MAY otherwise be
+    arbitrarily interleaved after transmission of \texttt{RESPONSE}.
 
   \subsection{Unary vs Streaming Semantics}
 
     \subsubsection{Unary Input}
-      If \textbf{HasInput} is true, the \texttt{INVOKE} payload MUST contain a
-      serialized unary input tuple.  If false, the payload MUST be empty.
-
-    \subsubsection{Input Stream}
-      If \textbf{HasInputStream} is true:
+      If \textbf{HasInput} is \texttt{true}, the payload of the
+      \texttt{INVOKE} frame MUST consist of:
 
       \begin{itemize}
-        \item The client MAY send zero or more \texttt{IN\_STREAM} frames.
-        \item Each \texttt{IN\_STREAM} frame MUST contain exactly one serialized
-          element of the declared input stream type.
-        \item If \textbf{HasInputStream} is \texttt{true} and the RPC
-          completes normally, the client MUST send exactly one
-          \texttt{IN\_CLOSE} when the RPC completes normally.
-
-          If the RPC is terminated by \texttt{CANCEL} or \texttt{ERROR}, the
-          client MUST NOT send \texttt{IN\_CLOSE}. Cancellation or error
-          implicitly closes the input stream.
-        \item After \texttt{IN\_CLOSE}, no further inbound stream frames are
-          permitted.
+        \item a metadata block encoded as specified in
+          Section~\ref{sec:metadata}; followed immediately by
+        \item the serialized unary input tuple, encoded as specified in
+          Section~\ref{sec:unary-tuples}.
       \end{itemize}
+
+      If \textbf{HasInput} is \texttt{false}, the payload of the
+      \texttt{INVOKE} frame MUST consist solely of the metadata block
+      described in Section~\ref{sec:requests}. An empty metadata set is
+      encoded as a metadata block of length zero.
+
+      In all cases, an \texttt{INVOKE} payload MUST begin with exactly one
+      metadata block. When \textbf{HasInput} is \texttt{false}, the client
+      MUST NOT encode a unary input tuple.
 
     \subsubsection{Unary Output}
     \label{sec:unary-output}
@@ -1784,12 +1851,23 @@ FNV-1a-32(input):
       particular, the server MUST NOT send any \texttt{OUT\_STREAM} or
       \texttt{OUT\_CLOSE} frames before the \texttt{RESPONSE} frame.
 
+      The payload of the \texttt{RESPONSE} frame consists of a metadata block
+      followed, optionally, by a unary output tuple.
+
       If \textbf{HasOutput} is \texttt{true}, the payload of the
-      \texttt{RESPONSE} frame MUST contain the serialized unary output tuple,
-      encoded as specified in Section~\ref{sec:unary-tuples}, using the unary
-      output values in their declaration order.  If \textbf{HasOutput} is
-      \texttt{false}, the payload of the \texttt{RESPONSE} frame MUST be
-      empty.
+      \texttt{RESPONSE} frame MUST contain:
+
+      \begin{itemize}
+        \item a metadata block encoded as specified in
+          Section~\ref{sec:metadata}; and
+        \item the serialized unary output tuple, encoded as specified in
+          Section~\ref{sec:unary-tuples}, using the unary output values in
+          declaration order.
+      \end{itemize}
+
+      If \textbf{HasOutput} is \texttt{false}, the payload of the
+      \texttt{RESPONSE} frame MUST contain a metadata block only.  An empty
+      metadata set is encoded as a metadata block of length zero.
 
       The transmission of a \texttt{RESPONSE} frame does not imply closure
       of any input or output streams. Unary output and stream lifetimes
