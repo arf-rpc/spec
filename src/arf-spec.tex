@@ -1400,6 +1400,12 @@ struct User {
             Section~\ref{sec:rpc-completion} have been satisfied,
             endpoints MUST treat the \texttt{CorrelationID} as inactive and
             MUST NOT send further frames for that \texttt{CorrelationID}.
+
+          \item Exactly one \texttt{INVOKE} frame MUST appear, and it MUST be
+            the first frame for that \texttt{CorrelationID}. A second
+            \texttt{INVOKE} for an active \texttt{CorrelationID} is a
+            connection-level protocol error (see Section~\ref{sec:requests}
+            and Section~\ref{sec:error-frames}).
         \end{itemize}
 
         Frames belonging to different \texttt{CorrelationID} values MAY be
@@ -1570,6 +1576,14 @@ FNV-1a-32(input):
 
     A client MUST NOT send additional \texttt{INVOKE} frames with the same
     \texttt{CorrelationID}.  Doing so constitutes a protocol error.
+
+    Upon receiving an \texttt{INVOKE} frame whose \texttt{CorrelationID}
+    identifies an RPC that it still considers active (as defined in
+    Section~\ref{sec:rpc-completion}), the server MUST treat this as a
+    connection-level protocol error. The server MUST NOT send an
+    \texttt{ERROR} frame for that \texttt{CorrelationID} in response, and
+    SHOULD close the underlying transport connection after logging or
+    otherwise recording the violation.
 
     \subsection{Method Forms and Allowed Frame Sequences}
     \label{RPC-MethodForms}
@@ -2051,6 +2065,17 @@ struct RPCError {
       The existence, absence, or contents of an \texttt{ERROR} payload MUST NOT
       affect the framing, completion, or cancellation rules defined elsewhere in
       this specification.
+
+      The \texttt{ERROR} frame is scoped to a single RPC identified by its
+      \texttt{CorrelationID}. Some classes of protocol violations are
+      therefore not safely expressible via \texttt{ERROR}. In particular,
+      if an endpoint receives a second \texttt{INVOKE} frame for a
+      \texttt{CorrelationID} that it still considers active, it cannot
+      safely emit an \texttt{ERROR} for that \texttt{CorrelationID} without
+      risking misassociation with the original RPC. Such conditions MUST be
+      treated as connection-level protocol errors: implementations SHOULD
+      close the transport connection and MUST NOT attempt to report them
+      using \texttt{ERROR}.
 
     \subsubsection{Cancellation}
     \label{sec:cancellation}
