@@ -23,9 +23,9 @@ hex-value         = "0x" 1*(DIGIT / HEXDIG)
 
 ; TYPES
 
-type              = composite-type / plain-type
+type              = primitive-type / composite-type / plain-type
 
-plain-type        = snake-ident / camel-ident
+plain-type        = *(snake-ident ".") camel-ident / primitive-type
 
 composite-type    = optional-type / array-type / map-type
 
@@ -35,9 +35,21 @@ array-type        = "array<" *WSP type *WSP ">"
 
 map-type          = "map<" *WSP map-key-type *WSP "," *WSP type *WSP ">"
 
-map-key-type      = plain-type
+map-key-type      = camel-ident / integer-primitive / "string"
 
-stream            = "stream" 1*WSP camel-ident
+stream            = "stream" 1*WSP plain-type
+
+primitive-type    =
+      "bool"
+    / "string"
+    / "bytes"
+    / integer-primitive
+    / "float32" / "float64"
+    / "timestamp"
+
+integer-primitive =
+    "int8"  / "int16"  / "int32"  / "int64"
+    / "uint8" / "uint16" / "uint32" / "uint64"
 
 ; SOURCE ROOT
 
@@ -123,19 +135,24 @@ service-rpc-prelude =
                     annotations *CRLF *WSP camel-ident *WSP
 
 service-rpc-params =
-                    "(" *service-rpc-input ")" *WSP
+                    "(" [ service-rpc-input ] ")" *WSP
 
 service-rpc-input =
                     stream /
-                    (snake-ident 1*WSP camel-ident
-                     *(*WSP "," *WSP snake-ident 1*WSP camel-ident)
+                    (snake-ident 1*WSP plain-type
+                     *(*WSP "," *WSP snake-ident 1*WSP plain-type)
                      [*WSP "," stream])
 
 service-rpc-returns =
                     "->" (
-                      (*WSP camel-ident *WSP) /
-                      ("(" *WSP camel-ident *WSP
-                        *("," *WSP camel-ident *WSP)
+                      (*WSP plain-type *WSP) /
+                      ("(" *WSP plain-type *WSP
+                        *("," *WSP plain-type *WSP)
                         [*WSP stream] *WSP ")") /
                       (*WSP stream *WSP)
                     )
+
+; NOTE: All plain-type occurrences in service-rpc-input and service-rpc-returns
+; MUST resolve, after name resolution, to user-defined struct or enum types.
+; Builtin primitive or composite types MUST NOT appear directly in RPC method
+; signatures; see the Types and Methods sections of the core specification.

@@ -58,8 +58,7 @@
   showstringspaces=false,
   breaklines=true,
   frame=top,
-  comment=[l]{//},
-  morecomment=[s]{/*}{*/},
+  comment=[l]{\#},
   commentstyle=\color{purple}\ttfamily,
   stringstyle=\color{red}\ttfamily,
   morestring=[b]',
@@ -211,12 +210,14 @@
 \end{center}
 
 \begin{abstract}
-  The Another RPC Framework (stylized \texttt{arf}) defines an interface description language (IDL),
-  a compact binary serialization format, and a request/response protocol for service-oriented communication.
+  The Another RPC Framework (stylized \texttt{arf}) defines an interface
+  description language (IDL), a compact binary serialization format, and a
+  request/response protocol for service-oriented communication.
 
-  arf aims to provide a simple, evolvable, and highly efficient system for defining structs, services, and
-  RPC methods while eliminating the need for field numeric identifiers in IDL source files. arf emphasizes
-  readability, forward compatibility, and minimal over-the-wire footprint.
+  arf aims to provide a simple, evolvable, and highly efficient system for
+  defining structs, services, and RPC methods while eliminating the need for
+  field numeric identifiers in IDL source files. arf emphasizes readability,
+  forward compatibility, and minimal over-the-wire footprint.
 
 \vskip 2mm
 
@@ -226,11 +227,12 @@
 
 \section{Status of This Memo}
 
-  This document is an Internet-Draft and is submitted in full conformance with the provisions of BCP 78
-  and BCP 79.
+  This document is an Internet-Draft and is submitted in full conformance with
+  the provisions of BCP 78 and BCP 79.
 
-  Internet-Drafts are working documents of the Internet Engineering Task Force (IETF). They are draft
-  documents valid for a maximum of six months and may be updated, replaced, or obsoleted at any time.
+  Internet-Drafts are working documents of the Internet Engineering Task Force
+  (IETF). They are draft documents valid for a maximum of six months and may be
+  updated, replaced, or obsoleted at any time.
 
 \section{Copyright Notice}
 
@@ -246,8 +248,8 @@
 
 \section{Introduction}
 
-  arf (Another RPC Framework) is a compact, binary, schema-first RPC mechanism designed for
-  service-oriented systems. arf provides:
+  arf (Another RPC Framework) is a compact, binary, schema-first RPC mechanism
+  designed for service-oriented systems. arf provides:
 
   \begin{itemize}
     \item A simple IDL with packages, imports, structs, and services.
@@ -257,16 +259,16 @@
     \item Re-openable service definitions for modular organization.
   \end{itemize}
 
-  arf draws inspiration from Protobuf, Cap’n Proto, and Thrift while focusing on ergonomics and
-  avoiding field-ID management clutter.
+  arf draws inspiration from Protobuf, Cap’n Proto, and Thrift while focusing
+  on ergonomics and avoiding field-ID management clutter.
 
 
 \section{Conventions and Terminology}
 
   The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT,
   RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL in this document are to be
-  interpreted as described in \cite{RFC2119} and \cite{RFC8174} when, and only when, they
-  appear in all capitals.
+  interpreted as described in \cite{RFC2119} and \cite{RFC8174} when, and only
+  when, they appear in all capitals.
 
   \subsubsection{Terms}
 
@@ -292,8 +294,8 @@
         belonging to the same RPC on a given connection.
 
       \item[Active RPC] An RPC for which an \texttt{INVOKE} frame has been sent
-        and for which the RPC completion conditions defined in Section~\ref{sec:rpc-completion}
-        have not yet been satisfied.
+        and for which the RPC completion conditions defined in
+        Section~\ref{sec:rpc-completion} have not yet been satisfied.
 
       \item[Unary] A non-streaming RPC parameter or result, serialized as
         a single value rather than as a sequence.
@@ -393,12 +395,18 @@ v1beta1.mypackage.OtherName
       MAY be used instead of aliases and MUST NOT depend on import aliasing.
 
   \subsection{Types}
+  \label{sec:types}
 
     arf provides a set of builtin types that form the foundation of the
-    serialization model.  These types MAY appear as struct fields and as
-    components of composite types. Builtin primitive types MUST NOT appear
-    directly as unary method parameters, unary method results, or stream element
-    types.
+    serialization model. These types MAY appear as struct fields and as
+    components of composite types.
+
+    Builtin primitive types (such as integers, booleans, floating-point values,
+    strings, timestamps, and byte sequences) and composite types (such as
+    \texttt{array<\dots>}, \texttt{map<\dots>}, and \texttt{optional<\dots>})
+    MUST NOT appear directly as unary method parameters, unary method results,
+    or stream element types. Only user-defined \texttt{struct} and \texttt{enum}
+    types are permitted in RPC method signatures (see Section~\ref{sec:methods}).
 
     \begin{itemize}
       \item \texttt{bool}: a boolean value.
@@ -406,15 +414,19 @@ v1beta1.mypackage.OtherName
         signed integers of the specified width.
       \item \texttt{uint8}, \texttt{uint16}, \texttt{uint32}, \texttt{uint64}:
         unsigned integers of the specified width.
-      \item \texttt{float32}, \texttt{float64}: IEEE~754 binary floating-point values.
+      \item \texttt{float32}, \texttt{float64}: IEEE~754 binary floating-point
+        values.
       \item \texttt{string}: a sequence of UTF-8 encoded Unicode scalar values.
-      \item \texttt{timestamp}: represents an instant on the UTC time-line encoded as
-        an unsigned integer count of milliseconds since the UTC Unix Epoch.
+      \item \texttt{timestamp}: represents an instant on the UTC time-line
+        encoded as an unsigned integer count of milliseconds since the UTC Unix
+        Epoch.
       \item \texttt{bytes}: an arbitrary sequence of octets.
-      \item \texttt{array<T>}: an ordered, variable-length sequence of values of type \texttt{T}.
+      \item \texttt{array<T>}: an ordered, variable-length sequence of values of
+        type \texttt{T}.
       \item \texttt{map<K, V>}: an unordered, variable-length association between
         keys of type \texttt{K} and values of type \texttt{V}.
-      \item \texttt{optional<T>}: a value of type \texttt{T} that MAY be present or absent.
+      \item \texttt{optional<T>}: a value of type \texttt{T} that MAY be present
+        or absent.
     \end{itemize}
 
     User-defined \texttt{struct} types MAY also be declared within a package.
@@ -593,7 +605,8 @@ v1beta1.mypackage.OtherName
 
     Each method name MUST be unique within the merged logical service definition
     formed after processing all re-opened service blocks. Multiple declarations
-    of the same method name are permitted only when their signatures are identical.
+    of the same method name are permitted only when their signatures are
+    identical.
 
   \subsubsection{Re-Openable Services}
 
@@ -639,10 +652,14 @@ v1beta1.mypackage.OtherName
     are defined:
 
     \begin{itemize}
-      \item \textbf{HasInput}: whether the method declares at least one unary input parameter.
-      \item \textbf{HasOutput}: whether the method declares at least one unary output value.
-      \item \textbf{HasInputStream}: whether the method declares a single input stream parameter.
-      \item \textbf{HasOutputStream}: whether the method declares a single output stream.
+      \item \textbf{HasInput}: whether the method declares at least one unary
+        input parameter.
+      \item \textbf{HasOutput}: whether the method declares at least one unary
+        output value.
+      \item \textbf{HasInputStream}: whether the method declares a single input
+        stream parameter.
+      \item \textbf{HasOutputStream}: whether the method declares a single
+        output stream.
     \end{itemize}
 
     The combination of these four booleans yields sixteen method forms.  Each
@@ -651,10 +668,11 @@ v1beta1.mypackage.OtherName
 
     All unary parameters, unary results, and stream element types MUST be
     defined as either \texttt{struct} or \texttt{enum} types.  Primitive and
-    composite types MUST NOT appear directly in RPC method signatures. This
+    composite types MUST NOT appear directly in RPC method signatures.  This
     limitation ensures that all data transmitted through RPC methods is carried
     by explicitly named message types, rather than anonymous primitive or
-    composite types.
+    composite types, and restates the restriction introduced in
+    Section~\ref{sec:types}.
 
     For the purposes of on-the-wire representation, the ordered list of unary
     input parameters of a method is treated as a \emph{unary input tuple}, and
@@ -720,7 +738,8 @@ YYYY(i I, stream T) -> (O, stream U);
 <package-name> "." <service-name> "." <method-name>
       \end{lstlisting}
 
-      This string is the canonical method identity used for identifier derivation.
+      This string is the canonical method identity used for identifier
+      derivation.
 
 \section{Serialization}
 \label{sec:serialization}
@@ -925,9 +944,9 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
 
     These encodings are used uniformly whether a primitive appears as a
     struct field or within a composite type. However, primitives MUST NOT be
-    used as unary method parameters, unary method results, or as stream elements.
-    For methods, unary inputs, unary outputs, and streams MUST use structs or
-    enums as specified in Section~\ref{sec:methods}.
+    used as unary method parameters, unary method results, or as stream
+    elements. For methods, unary inputs, unary outputs, and streams MUST use
+    structs or enums as specified in Section~\ref{sec:methods}.
 
     Key equality is defined by equality of the underlying key value.
     For integer keys, numeric equality applies. For enumeration keys,
@@ -1179,8 +1198,8 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
   \subsection{Binary Layout Example}
   \label{sec:layout-example}
 
-    This section provides a concrete example illustrating how arf encodes structs and
-    how length-prefixing enables safe evolution.
+    This section provides a concrete example illustrating how arf encodes
+    structs and how length-prefixing enables safe evolution.
 
     Consider the following initial struct definition:
 
@@ -1231,20 +1250,21 @@ struct User {
       \end{tabular}
     \end{center}
 
-    When an older receiver (that only knows the two-field layout) decodes this value,
-    it proceeds as follows:
+    When an older receiver (that only knows the two-field layout) decodes this
+    value, it proceeds as follows:
 
     \begin{itemize}
-      \item It reads \texttt{VarUInt(L')} and learns the total size of the struct body.
+      \item It reads \texttt{VarUInt(L')} and learns the total size of the
+        struct body.
       \item It decodes only the fields it recognizes (the first two).
-      \item It treats the remaining bytes in the struct body as unknown data and skips
-        them using the length prefix.
+      \item It treats the remaining bytes in the struct body as unknown data and
+        skips them using the length prefix.
     \end{itemize}
 
-    Because all struct values are length-delimited, receivers never need to understand
-    the internal layout of unknown fields in order to skip them safely.  This guarantees
-    forward compatibility for nested structs, arrays of structs, and arbitrarily complex
-    type graphs.
+    Because all struct values are length-delimited, receivers never need to
+    understand the internal layout of unknown fields in order to skip them
+    safely.  This guarantees forward compatibility for nested structs, arrays of
+    structs, and arbitrarily complex type graphs.
 
 
 \section{RPC Protocol}
@@ -1260,75 +1280,282 @@ struct User {
   big-endian byte order.  All frames are self-contained and do not rely
   on lower-layer segmentation semantics.
 
-  \subsection{Frame Format}
-  \label{sec:frame-format}
+    \subsection{Frame Format}
+    \label{sec:frame-format}
 
-    Each message exchanged between a client and server is encoded as an arf
-	\emph{frame}.  Frames are logical protocol units: bytes belonging to two
-	different frames MUST NOT be interleaved on the wire.  A single frame MAY be
-	split across multiple transport segments, but the concatenation of bytes
-	delivered by the transport for that connection MUST form a well-formed
-	sequence of complete frames.  The format of a frame is:
-
-    \begin{center}
-      \begin{tabular}{@{}ll@{}}
-        \toprule
-          Field         & Description \\ \midrule
-          Magic[2]        & Fixed value \texttt{0xAF 0x01} identifying arf framing. \\
-          Version[1]        & Protocol version.  This document specifies version~1. \\
-          MessageKind[1]      & Indicates the semantic type of the frame. \\
-          Flags[1]        & Reserved for future use; MUST be zero for version~1. \\
-          PackageID[4]      & Identifier for the package containing the service. \\
-          ServiceID[4]      & Identifier for the service. \\
-          MethodID[4]       & Identifier for the method. \\
-          CorrelationID[8]    & Opaque identifier linking frames belonging to the same RPC. \\
-          PayloadLength (var)   & Length of the payload using VarUInt encoding. \\
-          Payload (var)     & Serialized value according to Section~\ref{sec:serialization}. \\
-        \bottomrule
-      \end{tabular}
-    \end{center}
-
-    All frames MUST begin with the 2-byte magic value.  Receivers MUST treat
-    a mismatched magic value as a framing error and close the connection.
-
-    \paragraph{MessageKind}
-
-      The \texttt{MessageKind} byte MUST be one of the following:
+      Each message exchanged between a client and server is encoded as an arf
+      \emph{frame}.  Frames are logical protocol units: bytes belonging to two
+      different frames MUST NOT be interleaved on the wire.  A single frame MAY
+      be split across multiple transport segments, but the concatenation of
+      bytes delivered by the transport for that connection MUST form a
+      well-formed sequence of complete frames.  The format of a frame is:
 
       \begin{center}
         \begin{tabular}{@{}ll@{}}
           \toprule
-            Value & Meaning \\ \midrule
-            0x01  & \texttt{INVOKE}: initiates an RPC call. \\
-            0x02  & \texttt{IN\_STREAM}: element of an input stream. \\
-            0x03  & \texttt{IN\_CLOSE}: signals end of input stream. \\
-            0x04  & \texttt{OUT\_STREAM}: element of an output stream. \\
-            0x05  & \texttt{OUT\_CLOSE}: signals end of output stream. \\
-            0x06  & \texttt{RESPONSE}: unary output payload. \\
-            0x07  & \texttt{ERROR}: terminal error (Section~\ref{sec:error-frames}). \\
-            0x08  & \texttt{CANCEL}: client cancellation of the RPC. \\
+            Field         & Description \\ \midrule
+            Magic[2]        & Fixed value \texttt{0xAF 0x01} identifying arf framing. \\
+            Version[1]        & Protocol version.  This document specifies version~1. \\
+            MessageKind[1]      & Indicates the semantic type of the frame. \\
+            Flags[1]        & Reserved for future use; MUST be zero for version~1. \\
+            CorrelationID[8]    & Opaque identifier linking frames belonging to the same RPC. \\
+            PayloadLength (var)   & Length of the payload using VarUInt encoding. \\
+            Payload (var)     & Serialized value according to Section~\ref{sec:serialization}. \\
           \bottomrule
         \end{tabular}
       \end{center}
 
-      The semantics and payloads of each frame kind are defined in
-      Section~\ref{sec:requests} and subsequent subsections. In particular:
+      All frames MUST begin with the 2-byte magic value.  Receivers MUST treat
+      a mismatched magic value as a framing error and close the connection.
+
+      \subsubsection{MessageKind}
+
+        The \texttt{MessageKind} byte MUST be one of the following:
+
+        \begin{center}
+          \begin{tabular}{@{}ll@{}}
+            \toprule
+              Value & Meaning \\ \midrule
+              0x01  & \texttt{INVOKE}: initiates an RPC call. \\
+              0x02  & \texttt{CONTINUE}: server acknowledgment of \texttt{INVOKE}. \\
+              0x03  & \texttt{IN\_STREAM}: element of an input stream. \\
+              0x04  & \texttt{IN\_CLOSE}: signals end of input stream. \\
+              0x05  & \texttt{OUT\_STREAM}: element of an output stream. \\
+              0x06  & \texttt{OUT\_CLOSE}: signals end of output stream. \\
+              0x07  & \texttt{RESPONSE}: unary output payload and RPC termination. \\
+              0x08  & \texttt{ERROR}: terminal error (Section~\ref{sec:error-frames}). \\
+              0x09  & \texttt{CANCEL}: client cancellation of the RPC. \\
+              0x0A  & \texttt{CANCELLED}: cancellation acknowledgement (Section~\ref{sec:cancellation}) \\
+            \bottomrule
+          \end{tabular}
+        \end{center}
+
+        The semantics and payloads of each frame kind are defined in
+        Section~\ref{sec:requests} and subsequent subsections. In particular:
+
+        \begin{itemize}
+          \item \texttt{CANCEL} frames MUST have a payload length of zero. The
+            \texttt{PayloadLength} field MUST encode the value~0 using
+            \texttt{VarUInt}, and no payload bytes MUST follow. Receivers MUST
+            treat any \texttt{CANCEL} frame with a non-zero payload length as a
+            protocol error.
+        \end{itemize}
+
+    \subsubsection{INVOKE frame}
+      \texttt{INVOKE} frames serve to indicate the intention of a client to
+      start an RPC call. It carries the Package, Service and Method
+      identifiers, along with the Metadata block and, when \textbf{HasInput} is
+      \texttt{true}, the unary input tuple required by the method. When
+      \textbf{HasInput} is \texttt{false}, the \texttt{INVOKE} payload MUST
+      be empty.
+
+      Clients may assume the method has begun processing after a
+      \texttt{CONTINUE} frame is received in response to the \texttt{INVOKE}
+      frame. Otherwise, servers MUST return an \texttt{ERROR} frame indicating
+      that the RPC binding failed and no action was taken.
+
+      The \texttt{INVOKE} payload is composed of the following items, in order:
 
       \begin{itemize}
-        \item \texttt{CANCEL} frames MUST have a payload length of zero. The
-          \texttt{PayloadLength} field MUST encode the value~0 using
-          \texttt{VarUInt}, and no payload bytes MUST follow. Receivers MUST
-          treat any \texttt{CANCEL} frame with a non-zero payload length as a
-          protocol error.
+        \item \texttt{PackageID}: the identifier of the package where the RPC
+          method resides encoded as an unsigned 32-bit integer.
+        \item \texttt{ServiceID}: the identifier of the service providing the
+          RPC method encoded as an unsigned 32-bit integer.
+        \item \texttt{MethodID}: the identifier of the method being called on
+          the provided package and service encoded as an unsigned 32-bit
+          integer.
+        \item \texttt{Metadata}: a metadata block as described in
+          Section~\ref{sec:metadata}.
+        \item \texttt{Payload}: when \textbf{HasInput} is \texttt{true}, the
+          unary input tuple containing all inputs required by the RPC method,
+          as described in Section~\ref{sec:unary-tuples}; when \textbf{HasInput}
+          is \texttt{false}, no tuple is encoded and the payload MUST be empty.
       \end{itemize}
 
-    \subsection{Transport Assumptions}
-    \label{sec:transport-assumptions}
+    \subsubsection{CONTINUE Frame}
+
+      The \texttt{CONTINUE} frame acknowledges that the server has successfully
+      validated the \texttt{INVOKE} frame and that the RPC has been bound to the
+      specified \texttt{PackageID}, \texttt{ServiceID}, and \texttt{MethodID}.
+      After sending \texttt{CONTINUE}, the server commits to executing the RPC
+      unless a subsequent \texttt{CANCEL} frame terminates it.
+
+      A server MUST send exactly one \texttt{CONTINUE} frame for each valid
+      \texttt{INVOKE} it accepts. If the \texttt{INVOKE} cannot be bound
+      (unknown package, service, or method), the server MUST send an
+      \texttt{ERROR} frame instead of \texttt{CONTINUE}.
+
+      The payload of a \texttt{CONTINUE} frame MUST be empty.
+
+    \subsubsection{IN\_STREAM Frame}
+
+      The \texttt{IN\_STREAM} frame carries a value belonging to the input stream
+      of a streaming-input RPC (methods for which \textbf{HasInputStream} is
+      \texttt{true}). Clients MAY send zero or more \texttt{IN\_STREAM} frames
+      after receiving \texttt{CONTINUE}.
+
+      The payload of an \texttt{IN\_STREAM} frame consists of:
+
+      \begin{itemize}
+        \item A serialized stream element value, encoded using the type declared
+          in the method signature.
+      \end{itemize}
+
+      Clients MUST NOT send \texttt{IN\_STREAM} frames after sending
+      \texttt{IN\_CLOSE}, nor after sending \texttt{CANCEL}. Additionally,
+      \texttt{IN\_STREAM} frames MUST NOT contain Metadata blocks.
+
+    \subsubsection{IN\_CLOSE Frame}
+
+      The \texttt{IN\_CLOSE} frame signifies that the client has finished sending
+      all elements of the input stream.
+
+      If \textbf{HasInputStream} is \texttt{true}, the client MUST send exactly
+      one \texttt{IN\_CLOSE} frame unless it cancels the RPC before normal
+      completion. A \texttt{IN\_CLOSE} frame MUST contain an empty payload.
+
+      Sending \texttt{IN\_CLOSE} when the method does not declare an input stream
+      is a protocol error.
+
+    \subsubsection{OUT\_STREAM Frame}
+
+      The \texttt{OUT\_STREAM} frame carries a value belonging to the output
+      stream of the RPC (methods for which \textbf{HasOutputStream} is
+      \texttt{true}). Servers MAY send zero or more \texttt{OUT\_STREAM} frames
+      after sending \texttt{CONTINUE} and before sending \texttt{OUT\_CLOSE}.
+
+      The payload of an \texttt{OUT\_STREAM} frame consists of:
+
+      \begin{itemize}
+        \item A serialized stream element value, encoded with the declared
+          output stream type.
+      \end{itemize}
+
+      Servers MUST NOT send \texttt{OUT\_STREAM} frames after sending
+      \texttt{OUT\_CLOSE} or after sending \texttt{ERROR}. Additionally,
+      \texttt{OUT\_STREAM} frames MUST NOT contain Metadata blocks.
+
+    \subsubsection{OUT\_CLOSE Frame}
+
+      The \texttt{OUT\_CLOSE} frame signifies that the server has sent all output
+      stream elements.
+
+      If \textbf{HasOutputStream} is \texttt{true}, the server MUST send exactly
+      one \texttt{OUT\_CLOSE} frame before the \texttt{RESPONSE} frame.
+      A \texttt{OUT\_CLOSE} frame MUST contain an empty payload.
+
+      Sending \texttt{OUT\_CLOSE} when the method does not declare an output
+      stream is a protocol error.
+
+    \subsubsection{RESPONSE Frame}
+
+      The \texttt{RESPONSE} frame terminates the RPC returning its unary output
+      portion.
+
+      The payload of a \texttt{RESPONSE} frame consists of:
+
+      \begin{itemize}
+        \item a metadata block; and
+        \item if \textbf{HasOutput} is \texttt{true}, a unary output tuple as
+          defined in Section~\ref{sec:unary-tuples}; otherwise the payload MUST
+          contain no tuple data.
+      \end{itemize}
+
+      If a method declares output streams, the server MUST send
+      \texttt{OUT\_CLOSE} before sending \texttt{RESPONSE}.
+
+    \subsubsection{CANCEL Frame}
+
+      The \texttt{CANCEL} frame is sent by the client to request early
+      termination of an RPC.
+
+      A \texttt{CANCEL} frame has an empty payload.
+
+      Upon receiving \texttt{CANCEL} for an active RPC, the server:
+
+      \begin{itemize}
+        \item MUST notify the executor that the request has been cancelled.
+        \item MUST send a single \texttt{CANCELLED} frame in response to the
+          request.
+        \item MUST NOT send any other frame after the \texttt{CANCELLED} frame.
+        \item MUST consider any open stream as closed.
+      \end{itemize}
+
+      RPCs MUST be aware of cancellation semantics, and must provide
+      cancellation points to be able to correctly handle cancellation requests.
+      Rollbacks, checkpoints, and other semantics related to cancellation are
+      application-dependent and thus out of scope of this document.
+
+      A late \texttt{CANCEL} (one received after the server considers the RPC
+      complete) MUST be ignored and MUST NOT trigger any additional frame.
+
+    \subsubsection{CANCELLED Frame}
+
+      The \texttt{CANCELLED} frame acknowledges receipt and processing of a
+      client-issued \texttt{CANCEL} for a given \texttt{CorrelationID}.  Its
+      payload is empty; the \texttt{PayloadLength} field MUST be zero.
+
+      Upon sending \texttt{CANCELLED}, the server indicates that the RPC has
+      been aborted at the client's request. A \texttt{CANCELLED} frame is a
+      terminal, non-error outcome for that RPC: it terminates the RPC
+      identified by its \texttt{CorrelationID} but does not imply that a fault
+      occurred on the server. Other RPCs multiplexed on the same connection are
+      unaffected.
+
+    \subsubsection{ERROR Frame}
+
+      The \texttt{ERROR} frame is the terminal negative outcome of an RPC.
+
+      The payload of an \texttt{ERROR} frame MUST be an \emph{error payload}
+      structured as:
+
+      \begin{itemize}
+        \item A structured error body containing:
+          \begin{itemize}
+            \item a machine-readable error code, and
+            \item a human-readable message string.
+        \end{itemize}
+      \end{itemize}
+
+      An \texttt{ERROR} frame concludes the RPC for both endpoints. No further
+      frames for the associated \texttt{CorrelationID} may be sent afterward.
+      \texttt{ERROR} frames MUST NOT contain a Metadata block.
+
+  \subsection{Requests}
+  \label{sec:requests}
+
+    An RPC request is initiated by the client sending an \texttt{INVOKE} frame.
+    The on-wire layout of \texttt{INVOKE} (identifiers, metadata, and optional
+    unary inputs) is defined in Section~\ref{sec:frame-format} and its frame
+    subsections. This subsection specifies only sequencing and lifecycle rules.
+
+    \begin{itemize}
+      \item For each \texttt{CorrelationID}, the client sends exactly one
+        \texttt{INVOKE} as the first frame. The server responds with either
+        \texttt{CONTINUE} (binding succeeded) or a terminal \texttt{ERROR}
+        (binding failed).
+      \item If \textbf{HasInputStream} is \texttt{true}, the input stream is
+        considered open after \texttt{CONTINUE}. The client MAY send zero or more
+        \texttt{IN\_STREAM} frames. For a successfully completing RPC (no
+        \texttt{CANCEL} or \texttt{ERROR}), the client MUST send exactly one
+        \texttt{IN\_CLOSE}, and the server MUST NOT send \texttt{RESPONSE} until it
+        has received that \texttt{IN\_CLOSE}. After \texttt{CANCEL}, the client
+        MUST NOT send any further \texttt{IN\_STREAM} or \texttt{IN\_CLOSE} frames
+        for that \texttt{CorrelationID}.
+      \item A client MUST NOT send another \texttt{INVOKE} with the same
+        \texttt{CorrelationID}. Doing so is a protocol error. If the server
+        receives a duplicate \texttt{INVOKE} for an active RPC, it MUST treat this
+        as a connection-level protocol error and MUST close the transport
+        without attempting to report it via \texttt{ERROR}.
+    \end{itemize}
+
+  \subsection{Transport Assumptions}
+  \label{sec:transport-assumptions}
 
     arf is designed to run over a reliable, ordered, bidirectional transport.
     The transport MUST preserve byte order and MUST NOT duplicate or reorder
-    bytes. Examples of suitable transports include TCP connections, QUIC streams,
-    and Unix domain sockets.
+    bytes. Examples of suitable transports include TCP connections, QUIC
+    streams, and Unix domain sockets.
 
     Frames, as defined in Section~\ref{sec:frame-format}, are logical protocol
     units and do not necessarily align with transport-level segmentation.
@@ -1390,7 +1617,10 @@ struct User {
 
         \begin{itemize}
           \item Exactly one \texttt{INVOKE} frame MUST appear, and it MUST be
-            the first frame for that \texttt{CorrelationID}.
+            the first frame for that \texttt{CorrelationID}. A second
+            \texttt{INVOKE} for an active \texttt{CorrelationID} is a
+            connection-level protocol error (see Section~\ref{sec:requests}
+            and Section~\ref{sec:error-frames}).
 
           \item All subsequent frames with that \texttt{CorrelationID} MUST
             conform to the method form and sequencing rules defined in
@@ -1400,12 +1630,6 @@ struct User {
             Section~\ref{sec:rpc-completion} have been satisfied,
             endpoints MUST treat the \texttt{CorrelationID} as inactive and
             MUST NOT send further frames for that \texttt{CorrelationID}.
-
-          \item Exactly one \texttt{INVOKE} frame MUST appear, and it MUST be
-            the first frame for that \texttt{CorrelationID}. A second
-            \texttt{INVOKE} for an active \texttt{CorrelationID} is a
-            connection-level protocol error (see Section~\ref{sec:requests}
-            and Section~\ref{sec:error-frames}).
         \end{itemize}
 
         Frames belonging to different \texttt{CorrelationID} values MAY be
@@ -1415,19 +1639,19 @@ struct User {
     \subsubsection{Ordering Guarantees}
 
       The transport MUST preserve byte order, and endpoints MUST preserve the
-      frame order in which data is received.  As a consequence:
+    frame order in which data is received.  As a consequence:
 
-      \begin{itemize}
-        \item For a given \texttt{CorrelationID}, the sequence of frames is
-          strictly ordered and can be processed in order.
-        \item No ordering guarantees are provided between frames belonging to
-          different \texttt{CorrelationID} values beyond those implied by
-          the underlying transport.
-      \end{itemize}
+    \begin{itemize}
+      \item For a given \texttt{CorrelationID}, the sequence of frames is
+        strictly ordered and can be processed in order.
+      \item No ordering guarantees are provided between frames belonging to
+        different \texttt{CorrelationID} values beyond those implied by
+        the underlying transport.
+    \end{itemize}
 
-      arf does not define fairness or prioritization between concurrent RPCs.
-      Such policies are implementation-specific and MAY be influenced by
-      application-level considerations.
+    arf does not define fairness or prioritization between concurrent RPCs.
+    Such policies are implementation-specific and MAY be influenced by
+    application-level considerations.
 
   \subsection{Identifiers}
   \label{sec:identifiers}
@@ -1445,11 +1669,11 @@ struct User {
 
     \subsubsection{FNV-1a Hash Function}
 
-        arf derives \texttt{PackageID}, \texttt{ServiceID}, and \texttt{MethodID}
-        values using the FNV-1a non-cryptographic hash function operating on
-        32-bit unsigned integers.  FNV-1a is selected for its simplicity,
-        determinism, efficiency, and well-defined behavior across
-        implementations.
+        arf derives \texttt{PackageID}, \texttt{ServiceID}, and
+        \texttt{MethodID} values using the FNV-1a non-cryptographic hash
+        function operating on 32-bit unsigned integers.  FNV-1a is selected for
+        its simplicity, determinism, efficiency, and well-defined behavior
+        across implementations.
 
         The FNV-1a algorithm MUST be implemented exactly as specified in this
         section.  All conforming implementations MUST produce identical hash
@@ -1488,8 +1712,8 @@ struct User {
         reject the program.  Implementations MUST NOT accept such collisions
         silently.
 
-        Implementations MUST treat the input byte stream as an ordered sequence of
-        octets.  No Unicode normalization, case-folding, or locale-sensitive
+        Implementations MUST treat the input byte stream as an ordered sequence
+        of octets.  No Unicode normalization, case-folding, or locale-sensitive
         transformation is permitted.
 
         The normative description and reference implementation of the FNV-1a
@@ -1513,206 +1737,210 @@ FNV-1a-32(input):
       in \hyperref[annex:a]{Appendix A} and \hyperref[annex:b]{Appendix B},
       respectively.
 
-    \subsubsection{Identifier Invariance Across Frames}
-    \label{sec:identifier-invariance}
+  \subsection{Method Forms and Allowed Frame Sequences}
+  \label{RPC-MethodForms}
 
-      For a given \texttt{CorrelationID}, the tuple
-      (\texttt{PackageID}, \texttt{ServiceID}, \texttt{MethodID}) defines the
-      identity of the target method and MUST remain constant across all frames
-      belonging to that RPC.
+    arf defines sixteen distinct \emph{method forms}, derived from the
+    presence or absence of: (1) unary input parameters, (2) unary output
+    values, (3) an input stream, and (4) an output stream.  The four-letter
+    form label encodes the booleans \texttt{HasInput}, \texttt{HasOutput},
+    \texttt{HasInputStream}, and \texttt{HasOutputStream}, respectively,
+    using \texttt{Y} for ``present'' and \texttt{N} for ``absent''.
 
-      Specifically:
+    Table~\ref{tab:method-forms} specifies, for each form, whether the
+    client and server MAY send the streaming frame kinds defined in
+    Section~\ref{sec:frame-format}.  Frames belonging to different
+    \texttt{CorrelationID} values MAY be arbitrarily interleaved on the same
+    connection, as described in Section~\ref{sec:multiplexing}.
 
-      \begin{itemize}
-        \item The \texttt{INVOKE} frame establishes the authoritative tuple of
-          identifiers for the RPC.
-        \item Every subsequent frame with the same \texttt{CorrelationID}
-          (\texttt{IN\_STREAM}, \texttt{OUT\_STREAM}, \texttt{RESPONSE},
-          \texttt{CANCEL}, \texttt{ERROR}, etc.) MUST carry the exact same
-          identifier values.
-        \item Receivers MUST treat any frame whose identifiers do not exactly
-          match the established tuple for the corresponding
-          \texttt{CorrelationID} as a protocol error.
-      \end{itemize}
+    \begin{table}[H]
+      \centering
+      \caption{arf Method Forms and Permitted Streaming Frames \\ (Successful Completion Only; Cancellation Overrides)}
+      \label{tab:method-forms}
+      \begin{tabular}{lcccccccc}
+        \toprule
+        Form &
+        HasIn &
+        HasOut &
+        HasInS &
+        HasOutS &
+        C:IS &
+        C:IC &
+        S:OS &
+        S:OC \\
+        \midrule
+        NNNN & N & N & N & N & N & N & N & N \\
+        NNNY & N & N & N & Y & N & N & Y & Y \\
+        NNYN & N & N & Y & N & Y & Y & N & N \\
+        NNYY & N & N & Y & Y & Y & Y & Y & Y \\
+        NYNN & N & Y & N & N & N & N & N & N \\
+        NYNY & N & Y & N & Y & N & N & Y & Y \\
+        NYYN & N & Y & Y & N & Y & Y & N & N \\
+        NYYY & N & Y & Y & Y & Y & Y & Y & Y \\
+        YNNN & Y & N & N & N & N & N & N & N \\
+        YNNY & Y & N & N & Y & N & N & Y & Y \\
+        YNYN & Y & N & Y & N & Y & Y & N & N \\
+        YNYY & Y & N & Y & Y & Y & Y & Y & Y \\
+        YYNN & Y & Y & N & N & N & N & N & N \\
+        YYNY & Y & Y & N & Y & N & N & Y & Y \\
+        YYYN & Y & Y & Y & N & Y & Y & N & N \\
+        YYYY & Y & Y & Y & Y & Y & Y & Y & Y \\
+        \bottomrule
+      \end{tabular}
 
-  \subsection{Requests}
-  \label{sec:requests}
+      \vskip 0.5em
 
-    An RPC request is initiated by the client sending an \texttt{INVOKE}
-    frame.  The payload of the \texttt{INVOKE} frame depends on the method
-    form:
+      \raggedright
+      \footnotesize
+      \noindent
+      \textbf{Note:} The permissions in this table apply only to RPCs that
+        complete successfully. If an RPC is terminated by \texttt{CANCEL} or
+        \texttt{ERROR}, \texttt{IN\_CLOSE} and \texttt{OUT\_CLOSE} are neither
+        required nor permitted. Cancellation semantics are defined in
+        Section~\ref{sec:cancellation}.
+
+      \vskip 0.5em
+
+      \textbf{Note:} The table indicates which frame types may appear for a
+      given method form. It does not express sequencing or success-completion
+      requirements. When a stream is present, exactly one corresponding
+      \texttt{IN\_CLOSE} or \texttt{OUT\_CLOSE} frame is required for
+      successful completion (see Sections~\ref{sec:requests} and
+      \ref{sec:output-stream}).
+
+      \vskip 0.5em
+      \textbf{Legend}
+
+      \begin{description}[
+        style=sameline,
+        leftmargin=45pt,
+        labelsep=1.2em,
+        labelwidth=4em,
+        align=left,
+        font=\normalfont\ttfamily
+      ]
+        \item[HasIn]  HasInput
+        \item[HasOut] HasOutput
+        \item[HasInS] HasInputStream
+        \item[HasOutS] HasOutputStream
+        \item[C:IS]   client MAY send \texttt{IN\_STREAM}
+        \item[C:IC]   client MAY send \texttt{IN\_CLOSE}
+        \item[S:OS]   server MAY send \texttt{OUT\_STREAM}
+        \item[S:OC]   server MAY send \texttt{OUT\_CLOSE}
+      \end{description}
+    \end{table}
+
+    The following rules apply only to RPCs that complete successfully. In the
+    presence of cancellation or error, the stream-termination requirements in
+    this section are overridden by the cancellation and error semantics
+    defined in Section~\ref{sec:error-and-cancel}.
+
+    For each form, the following additional constraints apply, per
+    \texttt{CorrelationID}:
 
     \begin{itemize}
-      \item The payload of every \texttt{INVOKE} frame MUST begin with exactly
-        one metadata block encoded as described in Section~\ref{sec:metadata}.
+      \item The generic request invariants from Section~\ref{sec:requests}
+        apply unchanged: for each \texttt{CorrelationID}, the client sends
+        exactly one \texttt{INVOKE} as the first frame, and the server responds
+        with either \texttt{CONTINUE} (binding succeeded) or a terminal
+        \texttt{ERROR} (binding failed).
 
-      \item If \textbf{HasInput} is \texttt{true}, the metadata block MUST be
-        immediately followed by the serialization of the unary input tuple.
+      \item If HasInS is \texttt{Y} and the RPC initializes successfully, the
+        client MAY send zero or more \texttt{IN\_STREAM} frames.
 
-      \item If \textbf{HasInput} is \texttt{false}, the payload MUST consist
-      solely of the metadata block. An empty metadata set is encoded as a
-      metadata block of length zero.
+        For any RPC that completes successfully (that is, with a
+        \texttt{RESPONSE} and without \texttt{CANCEL} or \texttt{ERROR}), the
+        client MUST send exactly one \texttt{IN\_CLOSE} for that
+        \texttt{CorrelationID}, and the server MUST NOT send \texttt{RESPONSE}
+        until it has received that \texttt{IN\_CLOSE}.
 
-      \item If \textbf{HasInputStream} is \texttt{true}, the input stream is
-        considered open immediately after the \texttt{INVOKE} frame.
-        The client MAY send zero or more \texttt{IN\_STREAM} frames.
-        If the RPC completes normally (i.e., without cancellation or error),
-        the client MUST send exactly one \texttt{IN\_CLOSE}.
+        If the RPC is terminated by \texttt{CANCEL} or \texttt{ERROR},
+        \texttt{IN\_CLOSE} MUST NOT be sent. If HasInS is \texttt{N}, the
+        client MUST NOT send \texttt{IN\_STREAM} or \texttt{IN\_CLOSE} at any
+        time.
 
-        If the RPC is aborted by sending \texttt{CANCEL}, the client MUST NOT
-        send \texttt{IN\_CLOSE}. Cancellation implicitly closes the input stream.
+      \item If HasOutS is \texttt{Y} and the RPC is initialized successfully,
+        the server MAY send zero or more \texttt{OUT\_STREAM} frames.
+
+        For any RPC that completes successfully, the server MUST send exactly
+        one \texttt{OUT\_CLOSE} frame for that \texttt{CorrelationID}, and it
+        MUST send that \texttt{OUT\_CLOSE} before sending \texttt{RESPONSE}.
+
+        If the RPC is terminated by \texttt{CANCEL} or \texttt{ERROR}, the
+        server MUST NOT send \texttt{OUT\_CLOSE}. Cancellation or error
+        implicitly closes the output stream. If HasOutS is \texttt{N}, the
+        server MUST NOT send \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} at
+        any time.
     \end{itemize}
 
-    The unary input tuple is encoded as:
+    Sending a \texttt{RESPONSE} frame for a method form with
+    \textbf{HasInputStream} or \textbf{HasOutputStream} set to \texttt{true}
+    \emph{before} the required \texttt{IN\_CLOSE} and/or \texttt{OUT\_CLOSE}
+    frames have been sent and received (in the successful, non-error,
+    non-cancel case) is a protocol error. Because such an error cannot be
+    reliably reported using an \texttt{ERROR} frame scoped to the same
+    \texttt{CorrelationID}, implementations SHOULD treat it as a
+    connection-level protocol violation and close the underlying transport.
 
-    \begin{enumerate}
-      \item \texttt{VarUInt(L)}, where $L$ is the total byte length of
-        the tuple payload.
-      \item The serialized representation of each unary input value, in
-        declaration order.
-    \end{enumerate}
+  \subsection{Interleaving of Input and Output Streams}
 
-    Each unary input value MUST be a struct or enum instance.
+    For method forms that declare both an input stream and an output
+    stream (i.e., \textbf{HasInputStream} = true and
+    \textbf{HasOutputStream} = true), the client and server MAY send
+    \texttt{IN\_STREAM} and \texttt{OUT\_STREAM} frames in any order,
+    including arbitrarily interleaved.  Neither endpoint is required to
+    await stream activity from the peer before sending additional
+    elements.
 
-    A client MUST NOT send additional \texttt{INVOKE} frames with the same
-    \texttt{CorrelationID}.  Doing so constitutes a protocol error.
+    Stream directions are independent: the client MAY continue sending
+    input elements regardless of whether the server is actively sending
+    output elements, and vice versa.
 
-    Upon receiving an \texttt{INVOKE} frame whose \texttt{CorrelationID}
-    identifies an RPC that it still considers active (as defined in
-    Section~\ref{sec:rpc-completion}), the server MUST treat this as a
-    connection-level protocol error. The server MUST NOT send an
-    \texttt{ERROR} frame for that \texttt{CorrelationID} in response, and
-    SHOULD close the underlying transport connection after logging or
-    otherwise recording the violation.
+  \subsection{Unary vs Streaming Semantics}
 
-    \subsection{Method Forms and Allowed Frame Sequences}
-    \label{RPC-MethodForms}
+    \subsubsection{Unary Input}
+    \label{sec:unary-input}
 
-      arf defines sixteen distinct \emph{method forms}, derived from the
-      presence or absence of: (1) unary input parameters, (2) unary output
-      values, (3) an input stream, and (4) an output stream.  The four-letter
-      form label encodes the booleans \texttt{HasInput}, \texttt{HasOutput},
-      \texttt{HasInputStream}, and \texttt{HasOutputStream}, respectively,
-      using \texttt{Y} for ``present'' and \texttt{N} for ``absent''.
-
-      Table~\ref{tab:method-forms} specifies, for each form, whether the
-      client and server MAY send the streaming frame kinds defined in
-      Section~\ref{sec:frame-format}.  Frames belonging to different
-      \texttt{CorrelationID} values MAY be arbitrarily interleaved on the same
-      connection, as described in Section~\ref{sec:multiplexing}.
-
-      \begin{table}[H]
-        \centering
-        \caption{arf Method Forms and Permitted Streaming Frames \\ (Successful Completion Only; Cancellation Overrides)}
-        \label{tab:method-forms}
-        \begin{tabular}{lcccccccc}
-          \toprule
-          Form &
-          HasIn &
-          HasOut &
-          HasInS &
-          HasOutS &
-          C:IS &
-          C:IC &
-          S:OS &
-          S:OC \\
-          \midrule
-          NNNN & N & N & N & N & N & N & N & N \\
-          NNNY & N & N & N & Y & N & N & Y & Y \\
-          NNYN & N & N & Y & N & Y & Y & N & N \\
-          NNYY & N & N & Y & Y & Y & Y & Y & Y \\
-          NYNN & N & Y & N & N & N & N & N & N \\
-          NYNY & N & Y & N & Y & N & N & Y & Y \\
-          NYYN & N & Y & Y & N & Y & Y & N & N \\
-          NYYY & N & Y & Y & Y & Y & Y & Y & Y \\
-          YNNN & Y & N & N & N & N & N & N & N \\
-          YNNY & Y & N & N & Y & N & N & Y & Y \\
-          YNYN & Y & N & Y & N & Y & Y & N & N \\
-          YNYY & Y & N & Y & Y & Y & Y & Y & Y \\
-          YYNN & Y & Y & N & N & N & N & N & N \\
-          YYNY & Y & Y & N & Y & N & N & Y & Y \\
-          YYYN & Y & Y & Y & N & Y & Y & N & N \\
-          YYYY & Y & Y & Y & Y & Y & Y & Y & Y \\
-          \bottomrule
-        \end{tabular}
-
-        \vskip 0.5em
-
-        \raggedright
-        \footnotesize
-        \noindent
-        \textbf{Note:} The permissions in this table apply only to RPCs that
-          complete successfully. If an RPC is terminated by \texttt{CANCEL} or
-          \texttt{ERROR}, \texttt{IN\_CLOSE} and \texttt{OUT\_CLOSE} are neither
-          required nor permitted. Cancellation semantics are defined in
-          Section~\ref{sec:cancellation}.
-
-        \vskip 0.5em
-        \textbf{Legend}
-
-        \begin{description}[
-          style=sameline,
-          leftmargin=45pt,
-          labelsep=1.2em,
-          labelwidth=4em,
-          align=left,
-          font=\normalfont\ttfamily
-        ]
-          \item[HasIn]  HasInput
-          \item[HasOut] HasOutput
-          \item[HasInS] HasInputStream
-          \item[HasOutS] HasOutputStream
-          \item[C:IS]   client MAY send \texttt{IN\_STREAM}
-          \item[C:IC]   client MAY send \texttt{IN\_CLOSE}
-          \item[S:OS]   server MAY send \texttt{OUT\_STREAM}
-          \item[S:OC]   server MAY send \texttt{OUT\_CLOSE}
-        \end{description}
-      \end{table}
-
-      The following rules apply only to RPCs that complete successfully. In the
-      presence of cancellation or error, the stream-termination requirements in
-      this section are overridden by the cancellation and error semantics
-      defined in Section~\ref{sec:error-and-cancel}.
-
-      For each form, the following additional constraints apply, per
-      \texttt{CorrelationID}:
-
-      \begin{itemize}
-        \item Exactly one \texttt{INVOKE} frame MUST be sent, and it MUST be
-          the first frame.
-        \item If HasInS is \texttt{Y} and the RPC completes successfully, the
-          client MAY send zero or more \texttt{IN\_STREAM} frames followed by
-          exactly one \texttt{IN\_CLOSE}. If the RPC is terminated by
-          \texttt{CANCEL} or \texttt{ERROR}, \texttt{IN\_CLOSE} MUST NOT be
-          sent. If HasInS is \texttt{N}, the client MUST NOT send
-          \texttt{IN\_STREAM} or \texttt{IN\_CLOSE} at any time.
-
-        \item If HasOutS is \texttt{Y} and the RPC completes successfully, the
-          server MAY send zero or more \texttt{OUT\_STREAM} frames followed by
-          exactly one \texttt{OUT\_CLOSE}. If the RPC is terminated by
-          \texttt{CANCEL} or \texttt{ERROR}, \texttt{OUT\_CLOSE} MUST NOT be
-          sent. If HasOutS is \texttt{N}, the server MUST NOT send
-          \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} at any time.
-      \end{itemize}
+      The \texttt{INVOKE} frame layout (identifiers, metadata, and optional unary
+      inputs) is defined in Section~\ref{sec:frame-format}. This subsection states
+      only when the unary input tuple is present: if \textbf{HasInput} is
+      \texttt{true}, the unary input tuple is included after the metadata block; if
+      \textbf{HasInput} is \texttt{false}, no unary input tuple is encoded. Clients
+      MUST NOT encode a unary input tuple when \textbf{HasInput} is \texttt{false}.
 
     \subsubsection{RPC Completion}
     \label{sec:rpc-completion}
 
       An RPC is considered to have completed \emph{successfully} if and only if
-      it terminates via \texttt{RESPONSE} and all required stream closures have
-      been observed for that RPC, as defined below.
+      it terminates via \texttt{RESPONSE}.
+
+      A \texttt{RESPONSE} frame is a terminal condition only when it is validly
+      transmitted, meaning:
+
+      \begin{itemize}
+        \item if \textbf{HasInputStream} is \texttt{true}, the client has
+          already sent exactly one \texttt{IN\_CLOSE} for that
+          \texttt{CorrelationID}; and
+        \item if \textbf{HasOutputStream} is \texttt{true}, the server has
+          already sent exactly one \texttt{OUT\_CLOSE} for that
+          \texttt{CorrelationID}.
+      \end{itemize}
+
+      A \texttt{RESPONSE} received in violation of these sequencing rules MUST
+      be treated as a protocol error and MUST NOT be considered successful
+      completion.
 
       Any RPC whose lifecycle includes a terminal \texttt{ERROR} frame is
-      considered to have completed abnormally.
+      considered to have completed abnormally, while a terminal
+      \texttt{CANCELLED} indicates that the RPC was cancelled by the client. The
+      semantics of cancellation and how methods should respond to a cancellation
+      signal is implementation-dependent and out of scope of this document.
 
-      For an RPC that is still active at the server, client-initiated
-      cancellation necessarily results in abnormal completion: upon receiving a
-      \texttt{CANCEL} frame for an active RPC, the server MUST terminate the RPC
-      and send exactly one terminal \texttt{ERROR} acknowledgement for that
-      \texttt{CorrelationID} (Section~\ref{sec:cancellation}). A
-      \texttt{CANCEL} received after the server has already considered the RPC
-      complete is a late control signal and does not change the completion
-      state or produce an additional \texttt{ERROR} frame.
+      For an RPC that is still active at the server, a client-initiated
+      cancellation immediately aborts the execution of the RPC. The server MUST
+      send a single \texttt{CANCELLED} frame, and cease sending any other frames
+      for that RPC. More information is contained within
+      Section~\ref{sec:cancellation}.
 
       For a given \texttt{CorrelationID}, an RPC is considered complete, from the
       point of view of a given endpoint, when that endpoint has observed one of
@@ -1721,11 +1949,10 @@ FNV-1a-32(input):
       \begin{itemize}
         \item The endpoint has sent or received an \texttt{ERROR} frame for that
           \texttt{CorrelationID}; or
-
-        \item The endpoint has observed both:
+        \item The endpoint has observed either:
           \begin{itemize}
-            \item successful unary completion; and
-            \item closure of every stream flowing \emph{toward} that endpoint.
+            \item successful unary completion through a \texttt{RESPONSE} frame; or
+            \item cancellation through a \texttt{CANCELLED} frame.
           \end{itemize}
       \end{itemize}
 
@@ -1751,6 +1978,8 @@ FNV-1a-32(input):
               \texttt{IN\_CLOSE} frame; and
             \item by the \textbf{server} when it has \emph{received} exactly one
               \texttt{IN\_CLOSE} frame.
+            \item by both if any \texttt{ERROR} or \texttt{CANCELLED} frame is
+              exchanged.
           \end{itemize}
 
         \item A stream flowing \emph{from the server to the client} (the output
@@ -1761,29 +1990,19 @@ FNV-1a-32(input):
               \texttt{OUT\_CLOSE} frame; and
             \item by the \textbf{client} when it has \emph{received} exactly one
               \texttt{OUT\_CLOSE} frame.
+            \item by both if any \texttt{ERROR} or \texttt{CANCELLED} frame is
+              exchanged.
           \end{itemize}
       \end{itemize}
 
-      Thus, for a \emph{successful} RPC (no \texttt{ERROR} frame), the client
-      considers the RPC complete when:
+      Thus, for a \emph{successful} RPC (no \texttt{ERROR} or \texttt{CANCELLED}
+      frame), the client considers the RPC complete when it has received
+      \texttt{RESPONSE}. The client MUST consider the RPC as cancelled when
+      a \texttt{CANCELLED} frame is received, and MUST consider it failed in
+      case an \texttt{ERROR} frame is received.
 
-      \begin{itemize}
-        \item it has received \texttt{RESPONSE}, and
-        \item if \textbf{HasOutputStream} is \texttt{true}, it has received
-          \texttt{OUT\_CLOSE}, and
-        \item if \textbf{HasInputStream} is \texttt{true}, it has sent
-          \texttt{IN\_CLOSE}.
-      \end{itemize}
-
-      Symmetrically, the server considers the RPC complete when:
-
-      \begin{itemize}
-        \item it has sent \texttt{RESPONSE}, and
-        \item if \textbf{HasInputStream} is \texttt{true}, it has received
-          \texttt{IN\_CLOSE}, and
-        \item if \textbf{HasOutputStream} is \texttt{true}, it has sent
-          \texttt{OUT\_CLOSE}.
-      \end{itemize}
+      Symmetrically, the server considers the RPC terminated when it has sent
+      either \texttt{RESPONSE}, \texttt{ERROR}, or \texttt{CANCELLED}.
 
       A \texttt{CANCEL} frame is not itself a terminal condition; it is a
       control signal that requests termination of the RPC and triggers the
@@ -1797,7 +2016,7 @@ FNV-1a-32(input):
 
       With the exception of late \texttt{CANCEL} frames (see
       Section~\ref{sec:cancellation}), any frame received for an inactive
-      \texttt{CorrelationID} MUST be treated as a protocol error and SHOULD
+      \texttt{CorrelationID} MUST be treated as a protocol error and MUST
       cause the connection to be closed.
 
       Endpoints MUST NOT reuse a \texttt{CorrelationID} for a new RPC while
@@ -1805,100 +2024,41 @@ FNV-1a-32(input):
       In particular, sending or receiving a \texttt{CANCEL} frame does not, by
       itself, render an RPC complete. A client that has sent \texttt{CANCEL}
       MUST NOT reuse the corresponding \texttt{CorrelationID} on that
-      connection until it has either observed a terminal condition for the
-      RPC (an \texttt{ERROR} frame or the appropriate combination of
-      \texttt{RESPONSE} and stream closures) or closed the underlying
-      transport connection.
-
-  \subsection{Interleaving of Input and Output Streams}
-
-    For method forms that declare both an input stream and an output
-    stream (i.e., \textbf{HasInputStream} = true and
-    \textbf{HasOutputStream} = true), the client and server MAY send
-    \texttt{IN\_STREAM} and \texttt{OUT\_STREAM} frames in any order,
-    including arbitrarily interleaved.  Neither endpoint is required to
-    await stream activity from the peer before sending additional
-    elements.
-
-    Stream directions are independent: the client MAY continue sending
-    input elements regardless of whether the server is actively sending
-    output elements, and vice versa.
-
-    The server MUST transmit the \texttt{RESPONSE} frame before sending any
-    \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} frames, as specified in
-    Section~\ref{sec:unary-output}. Input and output streams MAY otherwise be
-    arbitrarily interleaved after transmission of \texttt{RESPONSE}.
-
-  \subsection{Unary vs Streaming Semantics}
-
-    \subsubsection{Unary Input}
-      If \textbf{HasInput} is \texttt{true}, the payload of the
-      \texttt{INVOKE} frame MUST consist of:
-
-      \begin{itemize}
-        \item a metadata block encoded as specified in
-          Section~\ref{sec:metadata}; followed immediately by
-        \item the serialized unary input tuple, encoded as specified in
-          Section~\ref{sec:unary-tuples}.
-      \end{itemize}
-
-      If \textbf{HasInput} is \texttt{false}, the payload of the
-      \texttt{INVOKE} frame MUST consist solely of the metadata block
-      described in Section~\ref{sec:requests}. An empty metadata set is
-      encoded as a metadata block of length zero.
-
-      In all cases, an \texttt{INVOKE} payload MUST begin with exactly one
-      metadata block. When \textbf{HasInput} is \texttt{false}, the client
-      MUST NOT encode a unary input tuple.
+      connection until it has either observed an \texttt{CANCELLED} frame, or
+      the appropriate combination of \texttt{RESPONSE} and stream closures) or
+      closed the underlying transport connection.
 
     \subsubsection{Unary Output}
     \label{sec:unary-output}
 
-      For every RPC that completes successfully (that is, does not terminate
-      with an \texttt{ERROR} frame), the server MUST send exactly one
-      \texttt{RESPONSE} frame for the corresponding \texttt{CorrelationID},
-      regardless of whether the method declares no unary outputs, one or more
-      unary outputs, an output stream, or any combination thereof.
-
-      The \texttt{RESPONSE} frame MUST be the first application-level
-      frame sent by the server for that \texttt{CorrelationID}.  In
-      particular, the server MUST NOT send any \texttt{OUT\_STREAM} or
-      \texttt{OUT\_CLOSE} frames before the \texttt{RESPONSE} frame.
-
-      The payload of the \texttt{RESPONSE} frame consists of a metadata block
-      followed, optionally, by a unary output tuple.
-
-      If \textbf{HasOutput} is \texttt{true}, the payload of the
-      \texttt{RESPONSE} frame MUST contain:
+      The on-wire layout of \texttt{RESPONSE} is defined in
+      Section~\ref{sec:frame-format}. Every RPC that completes successfully (no
+      \texttt{ERROR}) MUST send exactly one \texttt{RESPONSE} for the corresponding
+      \texttt{CorrelationID}, and it MUST be the last application-level frame for
+      that RPC. All ordering and closure rules remain unchanged:
 
       \begin{itemize}
-        \item a metadata block encoded as specified in
-          Section~\ref{sec:metadata}; and
-        \item the serialized unary output tuple, encoded as specified in
-          Section~\ref{sec:unary-tuples}, using the unary output values in
-          declaration order.
+        \item If \textbf{HasOutput} is \texttt{true}, the \texttt{RESPONSE} payload
+          contains the unary output tuple after the metadata block; otherwise, it
+          contains only the metadata block.
+        \item If \textbf{HasOutputStream} is \texttt{true}, exactly one
+          \texttt{OUT\_CLOSE} MUST be sent before \texttt{RESPONSE}. No
+          \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} frames may follow
+          \texttt{RESPONSE}.
+        \item If \textbf{HasInputStream} is \texttt{true}, the server MUST NOT send
+          \texttt{RESPONSE} until it has received exactly one \texttt{IN\_CLOSE} for
+          that \texttt{CorrelationID}.
+        \item If the RPC terminates via \texttt{CANCELLED} or \texttt{ERROR},
+          input and output streams are implicitly closed; \texttt{IN\_CLOSE} and
+          \texttt{OUT\_CLOSE} MUST NOT be sent afterward, and \texttt{RESPONSE}
+          is not sent.
       \end{itemize}
 
-      If \textbf{HasOutput} is \texttt{false}, the payload of the
-      \texttt{RESPONSE} frame MUST contain a metadata block only.  An empty
-      metadata set is encoded as a metadata block of length zero.
-
-      The transmission of a \texttt{RESPONSE} frame does not imply closure
-      of any input or output streams. Unary output and stream lifetimes
-      are independent.
-
-    \subsubsection{Unary Output Ordering}
-
-      For all method forms in which \textbf{HasOutput} is true, the server
-      MUST send the \texttt{RESPONSE} frame before transmitting any
-      \texttt{OUT\_STREAM} frames.  Once \texttt{RESPONSE} has been sent,
-      the server MAY interleave \texttt{OUT\_STREAM} frames with incoming
-      \texttt{IN\_STREAM} frames arbitrarily.
-
     \subsubsection{Output Stream}
+    \label{sec:output-stream}
 
       If \textbf{HasOutputStream} is \texttt{true}, the server MAY produce an
-      output stream \emph{after} sending the \texttt{RESPONSE} frame.
+      output stream \emph{after} sending the \texttt{CONTINUE} frame.
 
       In that case, the following rules apply for the given
       \texttt{CorrelationID}:
@@ -1907,14 +2067,17 @@ FNV-1a-32(input):
         \item The server MAY send zero or more \texttt{OUT\_STREAM} frames.
         \item Each \texttt{OUT\_STREAM} frame MUST contain exactly one
           serialized element of the declared output stream type.
-        \item If the RPC completes successfully, the server MUST send exactly
-          one \texttt{OUT\_CLOSE} frame.
+        \item If the RPC completes successfully (that is, with a
+          \texttt{RESPONSE} and without \texttt{CANCEL} or \texttt{ERROR}), the
+          server MUST send exactly one \texttt{OUT\_CLOSE} frame for that
+          \texttt{CorrelationID}, and it MUST send this \texttt{OUT\_CLOSE}
+          before the \texttt{RESPONSE} frame.
 
           If the RPC terminates due to \texttt{CANCEL} or \texttt{ERROR}, the
           server MUST NOT send \texttt{OUT\_CLOSE}. Cancellation or error
           implicitly closes the output stream.
         \item The server MUST NOT send any \texttt{OUT\_STREAM} or
-          \texttt{OUT\_CLOSE} frames before the \texttt{RESPONSE} frame.
+          \texttt{OUT\_CLOSE} frames after the \texttt{RESPONSE} frame.
         \item After sending \texttt{OUT\_CLOSE}, the server MUST NOT send any
           further \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} frames for
           that \texttt{CorrelationID}.
@@ -1925,9 +2088,10 @@ FNV-1a-32(input):
       is:
 
       \begin{lstlisting}[language=plain]
-RESPONSE
+CONTINUE
 OUT_STREAM*   // zero or more times
 OUT_CLOSE
+RESPONSE
       \end{lstlisting}
 
   \subsection{Per-form Examples}
@@ -1940,6 +2104,7 @@ OUT_CLOSE
 
       \begin{lstlisting}[language=plain]
 INVOKE(CID)
+CONTINUE(CID)
 RESPONSE(CID)
       \end{lstlisting}
 
@@ -1947,42 +2112,50 @@ RESPONSE(CID)
 
       \begin{lstlisting}[language=plain]
 INVOKE(CID)
-RESPONSE(CID)
+CONTINUE(CID)
 OUT_STREAM(CID)
 OUT_STREAM(CID)
 OUT_CLOSE(CID)
+RESPONSE(CID)
       \end{lstlisting}
 
     \subsubsection{Form: YNYN (unary input, input stream, no unary output)}
 
       \begin{lstlisting}[language=plain]
 INVOKE(CID, unary-input)
-RESPONSE(CID)   // empty response
+CONTINUE(CID)
 IN_STREAM(CID, T)
 IN_STREAM(CID, T)
 IN_CLOSE(CID)
+RESPONSE(CID)   // empty response
       \end{lstlisting}
 
       \noindent
 
-      \textbf{Note:} This example demonstrates that unary completion does not
-      imply closure of the input stream. The server may legally return before
-      the client finishes sending input elements.
+      \textbf{Note:} In the successful case (no \texttt{CANCEL} or
+      \texttt{ERROR}), the client MUST eventually close the input stream by
+      sending exactly one \texttt{IN\_CLOSE} frame, and the server MUST NOT send
+      \texttt{RESPONSE} until it has received that \texttt{IN\_CLOSE}. The
+      server is free to process input elements and decide its unary result as
+      soon as it has sufficient information, but it is not permitted to complete
+      the RPC on the wire (by sending \texttt{RESPONSE}) before the input stream
+      has been explicitly closed.
 
     \subsubsection{Form: YYYY (full bidirectional streaming + unary input/output)}
 
 
       \begin{lstlisting}[language=plain]
 INVOKE(CID, unary-input)
+CONTINUE(CID)
+
 IN_STREAM(CID, T)
+OUT_STREAM(CID, U)
 IN_STREAM(CID, T)
+OUT_STREAM(CID, U)
 IN_CLOSE(CID)
+OUT_CLOSE(CID)
 
 RESPONSE(CID, unary-output)
-
-OUT_STREAM(CID, U)
-OUT_STREAM(CID, U)
-OUT_CLOSE(CID)
       \end{lstlisting}
 
 
@@ -1999,23 +2172,20 @@ OUT_CLOSE(CID)
       \begin{itemize}
         \item At most one \texttt{ERROR} frame MAY be sent per endpoint for a
           given RPC.
-        \item Once an endpoint has sent an \texttt{ERROR} frame, it MUST NOT send
-          any further frames with that \texttt{CorrelationID}.
+        \item Once an endpoint has sent an \texttt{ERROR} frame, it MUST NOT
+          send any further frames with that \texttt{CorrelationID}.
         \item Once an endpoint has received an \texttt{ERROR} frame, it MUST
           treat the RPC as terminated and MUST ignore any subsequent frames
           \emph{for that RPC} with that \texttt{CorrelationID}.
       \end{itemize}
 
-      The payload of an \texttt{ERROR} frame is defined as follows:
-
-      \begin{itemize}
-        \item If \texttt{PayloadLength} is zero, the \texttt{ERROR} frame carries
-          no structured payload.  The reason for termination is implementation-
-          defined and MAY be inferred from local context only.
-        \item If \texttt{PayloadLength} is non-zero, the payload MUST consist of
-          the serialized representation of exactly one \emph{RPC error
-          descriptor}, encoded according to Section~\ref{sec:serialization}.
-      \end{itemize}
+      Unless explicitly stated otherwise, any violation of the framing,
+      sequencing, or typing rules defined in this specification is a protocol
+      error. Protocol errors are connection-scoped conditions: the receiving
+      endpoint MUST treat them as connection-level failures and MUST close the
+      underlying transport connection. Only application-defined failures
+      explicitly represented as \texttt{ERROR} payloads are RPC-scoped and MAY
+      leave the connection itself intact.
 
       The RPC error descriptor has the following logical structure:
 
@@ -2030,25 +2200,21 @@ struct RPCError {
       The fields have the following semantics:
 
       \begin{itemize}
-        \item \texttt{code} is a numeric error code.  This specification reserves
-          the following well-known values:
+        \item \texttt{code} is a numeric error code.  This specification
+          reserves the following well-known values:
 
           \begin{itemize}
-            \item \texttt{0}: \textbf{OK}.  The RPC terminated without
-              application-level error.  This code is intended primarily for use
-              with cancellation acknowledgements (see
-              Section~\ref{sec:cancellation}).
-            \item \texttt{1}: \textbf{CANCELLED}.  The RPC was terminated because
-              the client requested cancellation.
-            \item \texttt{2}: \textbf{UNKNOWN}.  An unspecified server-side
+            \item \texttt{0}: \textbf{UNKNOWN}.  An unspecified server-side
               failure occurred.
+            \item \texttt{1}: \textbf{UNKNOWN\_METHOD}.  The RPC was rejected
+              because the server could not find a method to bind the call.
           \end{itemize}
 
           Additional code values MAY be defined by implementations and
           application profiles.
 
-        \item \texttt{message} is a human-readable diagnostic string intended for
-          logging and debugging.  It MUST NOT be relied on for programmatic
+        \item \texttt{message} is a human-readable diagnostic string intended
+          for logging and debugging.  It MUST NOT be relied on for programmatic
           behavior.
 
         \item \texttt{details} is an optional opaque blob that MAY carry
@@ -2073,81 +2239,62 @@ struct RPCError {
       \texttt{CorrelationID} that it still considers active, it cannot
       safely emit an \texttt{ERROR} for that \texttt{CorrelationID} without
       risking misassociation with the original RPC. Such conditions MUST be
-      treated as connection-level protocol errors: implementations SHOULD
+      treated as connection-level protocol errors: implementations MUST
       close the transport connection and MUST NOT attempt to report them
       using \texttt{ERROR}.
 
     \subsubsection{Cancellation}
     \label{sec:cancellation}
 
-      A client MAY abort an ongoing RPC using a \texttt{CANCEL} frame with the
-      same \texttt{CorrelationID} as the active call.  A \texttt{CANCEL} frame
-      MUST carry an empty payload; its \texttt{PayloadLength} field MUST be zero.
+      A client MAY request an ongoing RPC to be aborted using a \texttt{CANCEL}
+      frame with the same \texttt{CorrelationID} as the active call.
+      A \texttt{CANCEL} frame MUST carry an empty payload;
+      its \texttt{PayloadLength} field MUST be zero.
+
+      Cancellation is scoped to a single RPC. A \texttt{CANCEL} frame affects
+      only the RPC identified by its \texttt{CorrelationID}; it MUST NOT alter
+      the state or progression of any other active RPCs multiplexed on the same
+      connection.
 
       Upon receiving a \texttt{CANCEL} frame for an \emph{active} RPC (that is,
       one for which the completion conditions in
       Section~\ref{sec:rpc-completion} have not yet been satisfied), the
-      server:
+      server must notify the executor of the intention of the client to cancel
+      the RPC. The executor then SHOULD handle the signal accordingly.
 
-      \begin{itemize}
-        \item MUST cease processing the RPC and release any associated resources
-          as soon as practical;
-        \item MUST NOT send any further frames related to that
-          \texttt{CorrelationID}, \emph{except} as permitted below;
-        \item MUST send exactly one terminal \texttt{ERROR} frame for that
-          \texttt{CorrelationID}, as defined in Section~\ref{sec:error-frames};
-          and
-        \item MUST send no further frames after that \texttt{ERROR}.
-      \end{itemize}
+      Once a \texttt{CANCEL} frame is received for an \emph{active} RPC, the
+      server MUST respond with a single \texttt{CANCELLED} frame, and cease
+      sending any other frame for the same \texttt{CorrelationID}. Any RPC's
+      attempts to send new frames MUST be reported as an error to the executor.
 
       If the server receives a \texttt{CANCEL} frame for a
       \texttt{CorrelationID} that it already considers inactive (because the
       RPC has completed according to Section~\ref{sec:rpc-completion}), it
       MUST treat the \texttt{CANCEL} as a late control signal, MUST NOT send
-      any additional frames (including \texttt{ERROR}) in response, and MUST
-      NOT treat the late \texttt{CANCEL} as a protocol error solely by virtue
-      of its arrival after completion.
-
-      When acknowledging a client-initiated cancellation that did not surface an
-      application-level failure, the server SHOULD use an \texttt{ERROR} payload
-      whose \texttt{RPCError.code} is either:
-
-      \begin{itemize}
-        \item \texttt{0} (\textbf{OK}), indicating that the RPC was cancelled at
-          the client's request and no error occurred; or
-        \item \texttt{1} (\textbf{CANCELLED}), indicating that the RPC was
-          terminated due to client cancellation and that the server did not
-          complete normal processing.
-      \end{itemize}
-
-      The choice between \texttt{OK} and \texttt{CANCELLED} is a policy decision
-      for the implementation.  In both cases, the \texttt{ERROR} frame serves as
-      a definitive acknowledgement that the server has observed and acted upon
-      the \texttt{CANCEL}.
+      any additional frames (including \texttt{ERROR} or \texttt{CANCELLED}) in
+      response, and MUST NOT treat the late \texttt{CANCEL} as a protocol error
+      solely by virtue of its lateness.
 
       A client that sends \texttt{CANCEL}:
 
       \begin{itemize}
-        \item MUST NOT send any frames other than the \texttt{CANCEL} itself for
-            that \texttt{CorrelationID} after transmitting \texttt{CANCEL};
-        \item MAY treat the RPC as terminated for local application purposes
-          immediately after sending \texttt{CANCEL} (for example, by releasing
-          local resources or failing any associated futures or promises);
+        \item MUST NOT treat the RPC as terminated for local application
+          purposes immediately after sending \texttt{CANCEL}. Cancellation is
+          only confirmed after a \texttt{CANCELLED} frame is received.
         \item MUST NOT reuse the \texttt{CorrelationID} for a new RPC on that
           connection until it has either observed a terminal condition as
           defined in Section~\ref{sec:rpc-completion} or closed the underlying
           transport connection; and
-        \item SHOULD ignore any subsequently received application-level frames
-          other than the terminal \texttt{ERROR} acknowledgement, if it chooses
-          to continue reading from the connection.
+        \item MUST ignore any subsequently received application-level
+          frames until the terminal \texttt{CANCELLED} acknowledgement.
       \end{itemize}
 
       If a \texttt{CANCEL} frame is received for an RPC that has already
       completed, the receiver MUST ignore the frame and MUST NOT respond
-      with an \texttt{ERROR}.
+      with an \texttt{ERROR} or \texttt{CANCELLED}.
 
-      Sending \texttt{CANCEL} implicitly closes the input stream and/or output
-      stream, if any are currently open. No \texttt{IN\_CLOSE} or
+      Sending \texttt{CANCELLED} implicitly closes the input stream and/or
+      output stream, if any are currently open. No \texttt{IN\_CLOSE} or
       \texttt{OUT\_CLOSE} frames are required or permitted after cancellation.
 
   \subsection{Backpressure}
@@ -2195,30 +2342,32 @@ struct RPCError {
   \subsection{Removing Fields}
 
     Fields MUST NOT be removed from a struct in a way that changes the ordinal
-    position of any remaining field.  Instead, fields that are no longer used SHOULD
-    be marked with the \texttt{@deprecated} attribute and retained with their
-    original ordinal position.
+    position of any remaining field.  Instead, fields that are no longer used
+    SHOULD be marked with the \texttt{@deprecated} attribute and retained with
+    their original ordinal position.
 
-    Senders SHOULD omit deprecated fields when serializing.  Receivers MUST accept
-    and ignore deprecated fields if they appear.
+    Senders SHOULD omit deprecated fields when serializing.  Receivers MUST
+    accept and ignore deprecated fields if they appear.
 
-    If a field must be fully removed (such that its ordinal becomes invalid), this
-    MUST be done only by introducing a new package version (see
+    If a field must be fully removed (such that its ordinal becomes invalid),
+    this MUST be done only by introducing a new package version (see
     Section~\ref{sec:versioning}).  No cross-package compatibility is required.
 
   \subsection{Changing Types}
 
-    A field's type MUST NOT change within the same package version.  Any modification
-    to a field's type—including widening (e.g., \texttt{int32} to \texttt{int64}),
-    narrowing, or structural change—constitutes a backward-incompatible change.
+    A field's type MUST NOT change within the same package version.  Any
+    modification to a field's type—including widening (e.g., \texttt{int32} to
+    \texttt{int64}), narrowing, or structural change—constitutes a
+    backward-incompatible change.
 
     Type changes MUST be performed only by introducing a new package version.
 
-    Changing a field from a concrete type to \texttt{optional<T>} within the same
-    package version is permitted only if:
+    Changing a field from a concrete type to \texttt{optional<T>} within the
+    same package version is permitted only if:
     \begin{itemize}
       \item the wire encoding is identical when the value is present, and
-      \item receivers can safely interpret the absence of the value as ``not present''.
+      \item receivers can safely interpret the absence of the value as ``not
+        present''.
     \end{itemize}
 
     Changing a field from \texttt{optional<T>} to a non-optional type is not
@@ -2257,14 +2406,16 @@ struct RPCError {
   arf describes a serialization format and an RPC protocol but does not
   mandate any particular transport security mechanism.  When deployed over
   an untrusted network, implementations MUST provide confidentiality,
-  integrity, and endpoint authentication using a transport such as TLS \cite{RFC8446},
-  QUIC \cite{RFC9000} with TLS 1.3 \cite{RFC9001}, or an equivalent secure channel.
+  integrity, and endpoint authentication using a transport such as TLS
+  \cite{RFC8446}, QUIC \cite{RFC9000} with TLS 1.3 \cite{RFC9001}, or an
+  equivalent secure channel.
 
   Endpoints MUST validate that incoming frames conform to the arf framing
   rules, including length fields, frame ordering constraints, and stream
-  termination semantics.  Malformed or truncated frames MUST result in
-  termination of the associated \texttt{CorrelationID} and SHOULD result
-  in connection closure.
+  termination semantics. Malformed or truncated frames MUST be treated as
+  protocol errors: they MUST result in termination of the associated
+  \texttt{CorrelationID} and MUST cause the underlying connection to be
+  closed, as described in Section~\ref{sec:error-frames}.
 
   Implementations MUST impose limits on:
   \begin{itemize}
@@ -2586,7 +2737,8 @@ static inline int64_t arf_zigzag64_decode(uint64_t z) {
         \item whether \texttt{RESPONSE} has been sent or received,
         \item whether the input stream (if any) is open or closed,
         \item whether the output stream (if any) is open or closed,
-        \item whether an \texttt{ERROR} or \texttt{CANCEL} has terminated the RPC.
+        \item whether an \texttt{ERROR} or \texttt{CANCEL} has terminated the
+          RPC.
       \end{itemize}
 
       Once the RPC completion conditions in Section~\ref{sec:rpc-completion}
@@ -2644,9 +2796,9 @@ static inline int64_t arf_zigzag64_decode(uint64_t z) {
     \subsection{Error Mapping and Diagnostics}
 
       arf defines a structured error payload format for \texttt{ERROR} frames
-      via the \texttt{RPCError} descriptor (Section~\ref{sec:error-frames}). This
-      structure provides a machine-readable error code, a human-readable message,
-      and optional opaque details.
+      via the \texttt{RPCError} descriptor (Section~\ref{sec:error-frames}).
+      This structure provides a machine-readable error code, a human-readable
+      message, and optional opaque details.
 
       Implementations SHOULD define internal error categories and map them onto
       \texttt{RPCError} as follows:
@@ -2663,14 +2815,14 @@ static inline int64_t arf_zigzag64_decode(uint64_t z) {
           messages.
       \end{itemize}
 
-      Implementations SHOULD use the \texttt{RPCError.details} field sparingly and
-      only for optional, diagnostic data that is safe to expose. This field MAY
-      carry structured, application-specific error information encoded out of
-      band, but no interoperability is implied unless both peers explicitly
+      Implementations SHOULD use the \texttt{RPCError.details} field sparingly
+      and only for optional, diagnostic data that is safe to expose. This field
+      MAY carry structured, application-specific error information encoded out
+      of band, but no interoperability is implied unless both peers explicitly
       agree on its format.
 
-      Error messages are intended for human diagnostics and logging only and MUST
-      NOT be relied upon for programmatic behavior.
+      Error messages are intended for human diagnostics and logging only and
+      MUST NOT be relied upon for programmatic behavior.
 
       If an \texttt{ERROR} frame is received with an unparseable or malformed
       payload, the receiver MUST still treat the frame as terminal for the RPC
