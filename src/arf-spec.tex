@@ -662,8 +662,14 @@ v1beta1.mypackage.OtherName
         output stream.
     \end{itemize}
 
-    The combination of these four booleans yields sixteen method forms.  Each
-    form has a well-defined set of legal frame sequences, as specified in
+    The combination of these four booleans yields sixteen logical method forms.
+    However, arf forbids method signatures that declare both unary output values
+    and an output stream. Any method whose form has \textbf{HasOutput} =
+    \texttt{true} and \textbf{HasOutputStream} = \texttt{true} (i.e., forms
+    NYNY, NYYY, YYNY, and YYYY) is invalid and MUST be rejected by compilers.
+
+    The remaining twelve forms are considered \emph{legal method forms}. Each
+    legal form has a well-defined set of legal frame sequences, as specified in
     Section~\ref{RPC-MethodForms}.
 
     All unary parameters, unary results, and stream element types MUST be
@@ -687,12 +693,19 @@ v1beta1.mypackage.OtherName
     input parameter list or the output tuple.  A method MAY declare at most
     one input stream and at most one output stream.
 
+    A method that declares an output stream MUST NOT declare any unary output
+    values. Its output side consists solely of the output stream. In other
+    words, method signatures in which \textbf{HasOutput} and
+    \textbf{HasOutputStream} are both \texttt{true} are syntactically invalid in
+    arf and MUST be rejected by compilers.
+
     Examples:
 
     \begin{lstlisting}[language=arf]
 NNYN(stream T);
-NYNY() -> (O, stream U);
-YYYY(i I, stream T) -> (O, stream U);
+NYNN() -> O;
+YNNY(i I) -> stream U;
+YNYY(i I, stream T) -> stream U;
     \end{lstlisting}
 
     A streaming parameter is written as \texttt{stream <Type>}.  Unary
@@ -1300,7 +1313,7 @@ struct User {
             Flags[1]        & Reserved for future use; MUST be zero for version~1. \\
             CorrelationID[8]    & Opaque identifier linking frames belonging to the same RPC. \\
             PayloadLength (var)   & Length of the payload using VarUInt encoding. \\
-            Payload (var)     & Serialized value according to Section~\ref{sec:serialization}. \\
+            Payload (var)     & Frame payload. Payload layout is defined in the frame-type subsections below. \\
           \bottomrule
         \end{tabular}
       \end{center}
@@ -1309,6 +1322,7 @@ struct User {
       a mismatched magic value as a framing error and close the connection.
 
       \subsubsection{MessageKind}
+      \label{sec:messagekind}
 
         The \texttt{MessageKind} byte MUST be one of the following:
 
@@ -1346,15 +1360,15 @@ struct User {
       start an RPC call. It carries the Package, Service and Method
       identifiers, along with the Metadata block and, when \textbf{HasInput} is
       \texttt{true}, the unary input tuple required by the method. When
-      \textbf{HasInput} is \texttt{false}, the \texttt{INVOKE} payload MUST
-      be empty.
+      \textbf{HasInput} is \texttt{false}, the \texttt{INVOKE} frame must omit
+      the input tuple.
 
       Clients may assume the method has begun processing after a
       \texttt{CONTINUE} frame is received in response to the \texttt{INVOKE}
       frame. Otherwise, servers MUST return an \texttt{ERROR} frame indicating
       that the RPC binding failed and no action was taken.
 
-      The \texttt{INVOKE} payload is composed of the following items, in order:
+      The \texttt{INVOKE} frame is composed of the following items, in order:
 
       \begin{itemize}
         \item \texttt{PackageID}: the identifier of the package where the RPC
@@ -1369,7 +1383,8 @@ struct User {
         \item \texttt{Payload}: when \textbf{HasInput} is \texttt{true}, the
           unary input tuple containing all inputs required by the RPC method,
           as described in Section~\ref{sec:unary-tuples}; when \textbf{HasInput}
-          is \texttt{false}, no tuple is encoded and the payload MUST be empty.
+          is \texttt{false}, no tuple is encoded and the input tuple must be
+          omitted, while other fields MUST be present.
       \end{itemize}
 
     \subsubsection{CONTINUE Frame}
@@ -1440,8 +1455,6 @@ struct User {
       The \texttt{OUT\_CLOSE} frame signifies that the server has sent all output
       stream elements.
 
-      If \textbf{HasOutputStream} is \texttt{true}, the server MUST send exactly
-      one \texttt{OUT\_CLOSE} frame before the \texttt{RESPONSE} frame.
       A \texttt{OUT\_CLOSE} frame MUST contain an empty payload.
 
       Sending \texttt{OUT\_CLOSE} when the method does not declare an output
@@ -1828,6 +1841,14 @@ FNV-1a-32(input):
         \item[S:OS]   server MAY send \texttt{OUT\_STREAM}
         \item[S:OC]   server MAY send \texttt{OUT\_CLOSE}
       \end{description}
+
+      \vskip 0.5em
+      \noindent
+      Forms in which \textbf{HasOut} and \textbf{HasOutS} are both \texttt{Y}
+      (namely NYNY, NYYY, YYNY, and YYYY) are reserved and \emph{MUST NOT} be
+      used in arf method declarations. Compilers MUST reject any method whose
+      signature would result in one of these forms. All other forms in
+      Table~\ref{tab:method-forms} are legal.
     \end{table}
 
     The following rules apply only to RPCs that complete successfully. In the
@@ -2032,15 +2053,19 @@ FNV-1a-32(input):
     \label{sec:unary-output}
 
       The on-wire layout of \texttt{RESPONSE} is defined in
-      Section~\ref{sec:frame-format}. Every RPC that completes successfully (no
-      \texttt{ERROR}) MUST send exactly one \texttt{RESPONSE} for the corresponding
-      \texttt{CorrelationID}, and it MUST be the last application-level frame for
-      that RPC. All ordering and closure rules remain unchanged:
+      Section~\ref{sec:frame-format}. For method forms without an output
+      stream (\textbf{HasOutputStream} = \texttt{false}), every RPC that
+      completes successfully (no \texttt{ERROR}) MUST send exactly one
+      \texttt{RESPONSE} for the corresponding \texttt{CorrelationID}, and it
+      MUST be the last application-level frame for that RPC. All ordering and
+      closure rules remain unchanged:
 
       \begin{itemize}
-        \item If \textbf{HasOutput} is \texttt{true}, the \texttt{RESPONSE} payload
-          contains the unary output tuple after the metadata block; otherwise, it
-          contains only the metadata block.
+        \item If \textbf{HasOutput} is \texttt{true}, the \texttt{RESPONSE}
+          payload contains the unary output tuple after the metadata block;
+          otherwise, it contains only the metadata block. In all legal method
+          forms, successful completion is signalled by exactly one
+          \texttt{RESPONSE} frame.
         \item If \textbf{HasOutputStream} is \texttt{true}, exactly one
           \texttt{OUT\_CLOSE} MUST be sent before \texttt{RESPONSE}. No
           \texttt{OUT\_STREAM} or \texttt{OUT\_CLOSE} frames may follow
@@ -2141,23 +2166,35 @@ RESPONSE(CID)   // empty response
       the RPC on the wire (by sending \texttt{RESPONSE}) before the input stream
       has been explicitly closed.
 
-    \subsubsection{Form: YYYY (full bidirectional streaming + unary input/output)}
-
+    \subsubsection{Form: YYNN (Unary only)}
 
       \begin{lstlisting}[language=plain]
-INVOKE(CID, unary-input)
-CONTINUE(CID)
-
-IN_STREAM(CID, T)
-OUT_STREAM(CID, U)
-IN_STREAM(CID, T)
-OUT_STREAM(CID, U)
-IN_CLOSE(CID)
-OUT_CLOSE(CID)
-
-RESPONSE(CID, unary-output)
+INVOKE
+CONTINUE
+RESPONSE   // metadata + unary output tuple
       \end{lstlisting}
 
+    \subsubsection{Form: NNNY (output stream)}
+
+      \begin{lstlisting}[language=plain]
+INVOKE
+CONTINUE
+OUT_STREAM*
+OUT_CLOSE
+RESPONSE   // metadata only
+      \end{lstlisting}
+
+    \subsubsection{Form: YNYY (unary input, input stream, output stream, no unary output)}
+
+      \begin{lstlisting}[language=plain]
+INVOKE (unary input tuple)
+CONTINUE
+IN_STREAM*
+OUT_STREAM*
+IN_CLOSE
+OUT_CLOSE
+RESPONSE   // metadata only
+      \end{lstlisting}
 
   \subsection{Error and Cancellation Semantics}
   \label{sec:error-and-cancel}
