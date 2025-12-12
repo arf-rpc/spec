@@ -418,9 +418,11 @@ v1beta1.mypackage.OtherName
       \item \texttt{float32}, \texttt{float64}: IEEE~754 binary floating-point
         values.
       \item \texttt{string}: a sequence of UTF-8 encoded Unicode scalar values.
-      \item \texttt{timestamp}: represents an instant on the UTC time-line
-        encoded as an unsigned integer count of milliseconds since the UTC Unix
-        Epoch.
+      \item \texttt{timestamp}: represents an instant on the UTC time-line,
+        encoded as a signed integer count of milliseconds elapsed since the Unix
+        Epoch (\texttt{1970-01-01T00:00:00Z}).  Values prior to the Unix Epoch
+        are represented as negative integers and are encoded using the signed
+        integer encoding rules defined in Section~\ref{sec:signed-int-encoding}.
       \item \texttt{bytes}: an arbitrary sequence of octets.
       \item \texttt{array<T>}: an ordered, variable-length sequence of values of
         type \texttt{T}.
@@ -959,10 +961,16 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
         Invalid UTF-8 byte sequences MUST cause deserialization to fail.
       \item \textbf{bytes}: encoded as \texttt{VarUInt(length)} followed by
         \texttt{length} raw octets.
-      \item \textbf{timestamp}: encoded as \texttt{VarUInt} representing the
-        number of milliseconds elapsed since the UTC Unix Epoch.
-        Implementations that cannot represent millisecond precision MUST
-        truncate toward zero.
+      \item \textbf{timestamp}: represents an instant on the UTC time-line,
+        encoded as a signed 64-bit integer count of milliseconds elapsed since
+        the Unix Epoch (\texttt{1970-01-01T00:00:00Z}).  Values prior to the
+        Unix Epoch are represented as negative integers and are encoded using
+        the signed integer encoding rules defined in
+        Section~\ref{sec:signed-int-encoding}.
+
+        Timestamp values represent absolute instants and do not carry timezone
+        or offset information. Implementations that cannot represent millisecond
+        precision MUST truncate toward zero.
     \end{itemize}
 
     These encodings are used uniformly whether a primitive appears as a
