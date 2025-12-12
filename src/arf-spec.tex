@@ -484,9 +484,16 @@ v1beta1.mypackage.OtherName
       encoded numeric value is the declared discriminant of the enumeration
       case.
 
-      Decoders MUST reject any enum value whose discriminant does not match a
-      known case in the enum definition.  Discriminants MUST NOT exceed 65535
-      prior to \texttt{VarUInt} encoding.
+      Decoders MUST accept any enum value whose discriminant does not match a
+      known case in the enum definition and MUST preserve its numeric
+      discriminant value.  Applications that require closed-set semantics SHOULD
+      explicitly validate that a received discriminant is one of the known cases
+      and reject or handle unknown values according to application policy.
+
+      This loose validation is intentional to allow enum definitions to evolve
+      without breaking older receivers, while still enabling applications to
+      enforce stricter semantics when required.  In any case, discriminants MUST
+      NOT exceed 65535 prior to \texttt{VarUInt} encoding.
 
     \subsubsection{Use as Map Keys}
 
@@ -850,8 +857,8 @@ n = (z \gg 1) \oplus -(z \wedge 1)
       Although ZigZag and \texttt{VarUInt} operate on unbounded integers in
       theory, arf enforces strict width limits based on the declared type.
 
-      Decoders \emph{MUST} reject any decoded value whose magnitude exceeds the
-      range of the declared signed type:
+      Decoders MUST reject any decoded value whose magnitude exceeds the range
+      of the declared signed type:
 
       \begin{itemize}
         \item \texttt{int8}:      $-128 \le n \le 127$
@@ -860,8 +867,8 @@ n = (z \gg 1) \oplus -(z \wedge 1)
         \item \texttt{int64}:     $-2^{63} \le n \le 2^{63}-1$
       \end{itemize}
 
-      Encoders \emph{MUST NOT} emit values outside the representable range of
-      the declared type.
+      Encoders MUST NOT emit values outside the representable range of the
+      declared type.
 
     \subsubsection{Rationale}
 
@@ -1001,7 +1008,8 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
 
       A map MAY be empty.  Map iteration order MUST be the order chosen by the
       encoder and MUST be preserved by the decoder without implying semantic
-      ordering or sorting.
+      ordering or sorting. The preserved order has no semantic meaning and MUST
+      NOT be relied upon by applications.
 
       Keys MUST be unique according to the equality semantics of type
       \texttt{K}.  Encoders MUST NOT emit duplicate keys and deserializers
@@ -1010,7 +1018,7 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
     \subsubsection{Structs}
 
       Struct values are serialized as \emph{length-prefixed records}.  Each
-      struct instance is preceded by a byte length that defines the total
+      struct instance is preceded by a length indicator that defines the total
       size of the struct body in bytes, allowing decoders to skip unknown
       types safely.
 
@@ -1045,18 +1053,18 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
 
         \item For a field whose declared type is not \texttt{optional<\dots>}:
           emit the serialized representation of the field value according to
-          the rules for its type.  Encoders \emph{MUST NOT} omit fields;
-          decoders \emph{MUST} treat truncation before the end of a required
+          the rules for its type.  Encoders MUST NOT omit fields;
+          decoders MUST treat truncation before the end of a required
           field as an error.
       \end{enumerate}
 
-      Decoders \emph{MUST} NOT assume knowledge of the physical layout of a
+      Decoders MUST NOT assume knowledge of the physical layout of a
       struct beyond the fields they explicitly recognize.  After decoding the
-      fields they understand, implementations \emph{MUST} skip any remaining
+      fields they understand, implementations MUST skip any remaining
       trailing bytes in the struct body as determined by the length prefix.
 
       Because field ordinals define the on-wire layout, implementations
-      \emph{MUST NOT} reorder fields within a package version.
+      MUST NOT reorder fields within a package version.
 
   \subsection{Unary Tuples}
   \label{sec:unary-tuples}
@@ -1220,9 +1228,12 @@ struct User {
   semantics, and the legal frame sequences for each method form defined in
   Section~\ref{sec:method-forms}.
 
-  Unless otherwise noted, all multi-byte integer fields are encoded in
-  big-endian byte order.  All frames are self-contained and do not rely
-  on lower-layer segmentation semantics.
+  All frames are self-contained and do not rely on lower-layer segmentation
+  semantics.
+
+  Unless otherwise noted, all multi-byte integer fields not being governed by
+  VarUInt or Zig-Zag encoding are encoded in big-endian byte order.  This also
+  applies to float values.
 
   \subsection{Frame Format}
   \label{sec:frame-format}
@@ -1293,8 +1304,8 @@ struct User {
       start an RPC call.  It carries the Package, Service and Method
       identifiers, and when \textbf{HasInput} is \texttt{true}, the unary input
       tuple required by the method.  When \textbf{HasInput} is \texttt{false},
-      the \texttt{INVOKE} frame must omit the input tuple by including a single
-      \texttt{VarUInt(0)} value.
+      the \texttt{INVOKE} frame must contain an empty unary input tuple; meaning
+      that only a \texttt{VarUInt(0)} is present.
 
       Clients MAY assume the method has begun processing after a
       \texttt{CONTINUE} frame is received in response to the \texttt{INVOKE}
@@ -1471,6 +1482,18 @@ struct User {
 
       An \texttt{ERROR} frame concludes the RPC for both endpoints. No further
       frames for the associated \texttt{CorrelationID} may be sent afterward.
+
+    \subsubsection{RESPONSE Frame}
+
+      The \texttt{RESPONSE} frame is the terminal positive output of an RPC.
+
+      The payload of an \texttt{RESPONSE} frame MUST be an \emph{unary output
+      tuple}.  Even for frames containing no items, the first portion of the
+      \emph{unary output tuple} MUST be present, indicating a zero-length tuple,
+      as specified in Section~\ref{sec:unary-tuples}.  For methods with unary
+      outputs, the unary output tuple is encoded as the amount of items in the
+      tuple through an VarUInt, followed by the serialized values of each of
+      them.
 
   \subsection{Requests}
   \label{sec:requests}
@@ -2535,7 +2558,7 @@ static inline int64_t arf_zigzag64_decode(uint64_t z) {
   \section{Test Vectors for Signed Integer Encoding}
   \label{annex:testvectors}
 
-    The following test vectors are normative.  Implementations \emph{MUST}
+    The following test vectors are normative.  Implementations MUST
     produce exactly the given ZigZag and VarUInt results.
 
     \subsection{Common Values}
