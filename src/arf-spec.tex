@@ -418,7 +418,7 @@ v1beta1.mypackage.OtherName
       \item \texttt{float32}, \texttt{float64}: IEEE~754 binary floating-point
         values.
       \item \texttt{string}: a sequence of UTF-8 encoded Unicode scalar values.
-      \item \texttt{timestamp}: represents an instant on the UTC time-line,
+      \item \texttt{timestamp}: represents an instant on the UTC timeline,
         encoded as a signed integer count of milliseconds elapsed since the Unix
         Epoch (\texttt{1970-01-01T00:00:00Z}).  Values prior to the Unix Epoch
         are represented as negative integers and are encoded using the signed
@@ -480,6 +480,7 @@ v1beta1.mypackage.OtherName
     naming rules as other top-level declarations within a package.
 
     \subsubsection{Encoding}
+    \label{sec:enum-encoding}
 
       Enumeration values are serialized as unsigned integers using
       \texttt{VarUInt} encoding (Section~\ref{sec:length-encoding}).  The
@@ -517,6 +518,10 @@ v1beta1.mypackage.OtherName
 
       Compilers MAY warn if an enum change breaks monotonicity or introduces
       large gaps, but such gaps are not semantically invalid.
+
+      Although enum declarations define a finite set of known values at a given
+      version, receivers MUST be prepared to handle unknown discriminants as
+      defined in Section~\ref{sec:enum-encoding}.
 
   \subsection{Struct Declarations}
   \label{sec:structs}
@@ -961,7 +966,7 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
         Invalid UTF-8 byte sequences MUST cause deserialization to fail.
       \item \textbf{bytes}: encoded as \texttt{VarUInt(length)} followed by
         \texttt{length} raw octets.
-      \item \textbf{timestamp}: represents an instant on the UTC time-line,
+      \item \textbf{timestamp}: represents an instant on the UTC timeline,
         encoded as a signed 64-bit integer count of milliseconds elapsed since
         the Unix Epoch (\texttt{1970-01-01T00:00:00Z}).  Values prior to the
         Unix Epoch are represented as negative integers and are encoded using
@@ -985,6 +990,10 @@ z = (-1 \ll 1) \oplus (-1 \gg 31) = 1
 
     Because structured types are forbidden as keys, equality testing is
     deterministic and independent of implementation-specific behavior.
+
+    \textbf{Note:} Primitive types defined in this section are forbidden as
+    direct RPC inputs, outputs, or stream elements, as specified in
+    Section~\ref{sec:methods}.
 
   \subsection{Composite Types}
 
@@ -1334,9 +1343,8 @@ struct User {
         \item \texttt{Payload}: when \textbf{HasInput} is \texttt{true}, the
           unary input tuple containing all inputs required by the RPC method,
           as described in Section~\ref{sec:unary-tuples}; when \textbf{HasInput}
-          is \texttt{false}, no tuple is encoded and the input tuple must be
-          omitted by including a single \texttt{VarUInt(0)} value, while other
-          fields MUST be present.
+          is \texttt{false}, an empty unary input tuple MUST be encoded as
+          VarUInt(0), while other fields MUST be present.
       \end{itemize}
 
     \subsubsection{CONTINUE Frame}
@@ -1496,11 +1504,12 @@ struct User {
 
       The \texttt{RESPONSE} frame is the terminal positive output of an RPC.
 
-      The payload of an \texttt{RESPONSE} frame MUST be an \emph{unary output
+      The payload of an \texttt{RESPONSE} frame MUST be a \emph{unary output
       tuple}.  Even for frames containing no items, the first portion of the
       \emph{unary output tuple} MUST be present, indicating a zero-length tuple,
       as specified in Section~\ref{sec:unary-tuples}.  For methods with unary
-      outputs, the unary output tuple is encoded as the amount of items in the
+      outputs, the unary output tuple is encoded as the total number of bytes
+      occupied by the concatenation of the serialized values comprising the
       tuple through an VarUInt, followed by the serialized values of each of
       them.
 
@@ -1638,6 +1647,12 @@ struct User {
       arf does not define fairness or prioritization between concurrent RPCs.
       Such policies are implementation-specific and MAY be influenced by
       application-level considerations.
+
+    \subsubsection{Connection-Level Protocol Violations}
+      Violations that prevent reliable correlation or recovery (e.g., duplicate
+      \texttt{INVOKE}, invalid frame sequencing) MUST result in transport
+      closure.  Other violations MAY be reported via \texttt{ERROR} when safe to
+      do so.
 
   \subsection{Identifiers}
   \label{sec:identifiers}
