@@ -1218,7 +1218,7 @@ struct User {
   serialized request and response values between a client and a server.
   This section defines the framing model, identifier space, message
   semantics, and the legal frame sequences for each method form defined in
-  Section~\ref{method-forms}.
+  Section~\ref{sec:method-forms}.
 
   Unless otherwise noted, all multi-byte integer fields are encoded in
   big-endian byte order.  All frames are self-contained and do not rely
@@ -1578,7 +1578,7 @@ struct User {
           Section~\ref{sec:error-frames}).
         \item All subsequent frames with that \texttt{CorrelationID} MUST
           conform to the method form and sequencing rules defined in
-          Section~\ref{RPC-MethodForms}.
+          Section~\ref{sec:method-forms}.
 
         \item Once the RPC completion conditions defined in
           Section~\ref{sec:rpc-completion} have been satisfied,
@@ -1983,7 +1983,7 @@ FNV-1a-32(input):
       itself, render an RPC complete.  A client that has sent \texttt{CANCEL}
       MUST NOT reuse the corresponding \texttt{CorrelationID} on that
       connection until it has either observed an \texttt{CANCELLED} frame, or
-      the appropriate combination of \texttt{RESPONSE} and stream closures) or
+      the appropriate combination of \texttt{RESPONSE} and stream closures or
       closed the underlying transport connection.
 
     \subsubsection{Unary Output}
