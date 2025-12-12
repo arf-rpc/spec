@@ -63,7 +63,7 @@
   stringstyle=\color{red}\ttfamily,
   morestring=[b]',
   morestring=[b]",
-  basicstyle=\ttfamily\small,
+  basicstyle=\ttfamily\footnotesize,
   aboveskip=20pt,
   belowskip=20pt,
   framesep=10pt
@@ -1246,6 +1246,7 @@ struct User {
     well-defined sequence of complete frames.  The format of a frame is:
 
     \begin{center}
+      \hspace*{-50pt}
       \begin{tabular}{@{}ll@{}}
         \toprule
         Field               & Description \\
@@ -2399,9 +2400,11 @@ struct RPCError {
   for this specification.
 
 \begin{quote}
-  \small
+  \footnotesize
   \VerbatimInput{grammar.abnf}
 \end{quote}
+
+\pagebreak
 
 \section{Security Considerations}
 
