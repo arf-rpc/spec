@@ -677,15 +677,25 @@ v1beta1.mypackage.OtherName
         output stream.
     \end{itemize}
 
-    The combination of these four booleans yields sixteen logical method forms,
-    but method signatures that declare unary output values and an output stream
-    are not valid, as such methods could yield fragile APIs, and potentially
-    impact the ergonomy of generated APIs.  This makes any method whose form
-    has \textbf{HasOutput} = \texttt{true} and \textbf{HasOutputStream} =
-    \texttt{true} (i.e., forms NYNY, NYYY, YYNY, and YYYY) invalid, and MUST be
-    rejected by compilers.
+    The combination of these four booleans yields sixteen logical method forms.
+    However, certain combinations are intentionally forbidden because they tend
+    to produce fragile or awkward generated APIs.
 
-    The remaining twelve forms are considered \emph{legal method forms}.  Each
+    Methods MUST NOT declare unary output values together with an output stream.
+    Thus, any method whose form has \textbf{HasOutput}=\texttt{true} and
+    \textbf{HasOutputStream}=\texttt{true} (i.e., NYNY, NYYY, YYNY, YYYY) is
+    invalid and MUST be rejected by compilers.
+
+    Additionally, methods MUST NOT declare unary output values together with an
+    input stream. Thus, any method whose form has \textbf{HasOutput}=\texttt{true}
+    and \textbf{HasInputStream}=\texttt{true} (i.e., NYYN and YYYN) is invalid
+    and MUST be rejected by compilers.
+
+    This restriction avoids APIs where the response is only available after the
+    client half-closes the input stream, which tends to leak protocol sequencing
+    into application logic.
+
+    The remaining ten forms are considered \emph{legal method forms}.  Each
     legal form has a well-defined set of legal frame sequences, as specified in
     Section~\ref{sec:method-forms}.
 
@@ -1776,13 +1786,11 @@ FNV-1a-32(input):
         NNYN & N & N & Y & N & Y & Y & N & N \\
         NNYY & N & N & Y & Y & Y & Y & Y & Y \\
         NYNN & N & Y & N & N & N & N & N & N \\
-        NYYN & N & Y & Y & N & Y & Y & N & N \\
         YNNN & Y & N & N & N & N & N & N & N \\
         YNNY & Y & N & N & Y & N & N & Y & Y \\
         YNYN & Y & N & Y & N & Y & Y & N & N \\
         YNYY & Y & N & Y & Y & Y & Y & Y & Y \\
         YYNN & Y & Y & N & N & N & N & N & N \\
-        YYYN & Y & Y & Y & N & Y & Y & N & N \\
         \bottomrule
       \end{tabular}
 
